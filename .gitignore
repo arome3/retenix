@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# env — never commit secrets; examples only
+.env*
+!.env.example
+
+# next.js
+.next/
+next-env.d.ts
+
+# builds
+dist/
+dist-types/
+*.tsbuildinfo
+out/
+cache/
+
+# tests
+coverage/
+playwright-report/
+test-results/
+
+# misc
+.DS_Store
+*.log
