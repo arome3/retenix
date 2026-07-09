@@ -1,0 +1,64 @@
+import { z } from "zod";
+
+// Canonical env-var names (doc 00 §Canonical environment variables) — never
+// invent alternatives. Parsed at import time; instrumentation.ts imports this
+// module so `next dev` / `next start` fail at boot naming every missing or
+// malformed variable. Reading process.env anywhere else is a lint error.
+
+const serverSchema = z.object({
+  MAGIC_SECRET_KEY: z.string().min(1),
+  DATABASE_URL: z.url(),
+  ANTHROPIC_API_KEY: z.string().min(1),
+  SESSION_SECRET: z.string().min(1),
+  APP_BASE_URL: z.url(),
+  SENTRY_AUTH_TOKEN: z.string().min(1),
+  INTERNAL_API_TOKEN: z.string().min(1),
+  // "1" enables demo-only affordances (rogue-instruction trigger, demo-scaled defaults).
+  DEMO_MODE: z.enum(["0", "1"]).default("0"),
+});
+
+const clientSchema = z.object({
+  NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY: z.string().min(1),
+  NEXT_PUBLIC_PARTICLE_PROJECT_ID: z.string().min(1),
+  NEXT_PUBLIC_PARTICLE_CLIENT_KEY: z.string().min(1),
+  NEXT_PUBLIC_PARTICLE_APP_UUID: z.string().min(1),
+  NEXT_PUBLIC_SENTRY_DSN: z.string().min(1),
+});
+
+function invalid(names: string[]): never {
+  throw new Error(
+    `[web] invalid environment — missing or malformed: ${names.join(", ")}`,
+  );
+}
+
+function issueNames(error: z.ZodError): string[] {
+  return [...new Set(error.issues.map((i) => i.path.join(".")))];
+}
+
+// NEXT_PUBLIC_ values must be referenced statically for Next's inliner.
+const parsedClient = clientSchema.safeParse({
+  NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY:
+    process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY,
+  NEXT_PUBLIC_PARTICLE_PROJECT_ID: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+  NEXT_PUBLIC_PARTICLE_CLIENT_KEY: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+  NEXT_PUBLIC_PARTICLE_APP_UUID: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+  NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+});
+if (!parsedClient.success) invalid(issueNames(parsedClient.error));
+
+export const clientEnv: z.infer<typeof clientSchema> = parsedClient.data;
+
+// Server vars are validated only on the server; importing clientEnv from a
+// client component must not evaluate (or leak) the server schema.
+export const env: z.infer<typeof serverSchema> = (() => {
+  if (typeof window !== "undefined") {
+    return new Proxy({} as z.infer<typeof serverSchema>, {
+      get() {
+        throw new Error("[web] server env accessed in the browser");
+      },
+    });
+  }
+  const parsed = serverSchema.safeParse(process.env);
+  if (!parsed.success) invalid(issueNames(parsed.error));
+  return parsed.data;
+})();
