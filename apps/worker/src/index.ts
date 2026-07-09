@@ -1,11 +1,11 @@
 import cron from "node-cron";
-import PgBoss from "pg-boss";
+import { PgBoss } from "pg-boss";
 import { env } from "../env";
 
 // Boot: cron + pg-boss workers. Module 08 fills in the handlers.
 async function main() {
   const boss = new PgBoss(env.DATABASE_URL);
-  boss.on("error", (err) => console.error("[worker] pg-boss error", err));
+  boss.on("error", (err: Error) => console.error("[worker] pg-boss error", err));
   await boss.start();
 
   // Per-minute due-plan scan cadence (module 08 implements the handler).

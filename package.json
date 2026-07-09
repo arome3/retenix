@@ -16,5 +16,16 @@
     "db:generate": "pnpm --filter @retenix/db db:generate",
     "e2e": "playwright test --config e2e/playwright.config.ts --pass-with-no-tests",
     "check:pins": "node scripts/check-pins.mjs"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1",
+    "concurrently": "^10",
+    "dotenv": "^17",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.20",
+    "typescript": "^5",
+    "typescript-eslint": "^8",
+    "vitest": "^4"
   }
 }
