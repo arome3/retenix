@@ -1,0 +1,20 @@
+{
+  "name": "retenix",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n web,worker -c blue,magenta \"pnpm --filter web dev\" \"pnpm --filter worker dev\"",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "typecheck": "tsc -b && tsc -p apps/web --noEmit",
+    "lint": "eslint .",
+    "db:push": "pnpm --filter @retenix/db db:push",
+    "db:generate": "pnpm --filter @retenix/db db:generate",
+    "e2e": "playwright test --config e2e/playwright.config.ts --pass-with-no-tests",
+    "check:pins": "node scripts/check-pins.mjs"
+  }
+}
