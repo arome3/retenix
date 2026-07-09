@@ -19,6 +19,18 @@ importers:
       '@particle-network/universal-account-sdk':
         specifier: 2.0.3
         version: 2.0.3(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.4.3)
+      '@retenix/db':
+        specifier: workspace:^
+        version: link:../../packages/db
+      '@retenix/registry':
+        specifier: workspace:^
+        version: link:../../packages/registry
+      '@retenix/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
+      '@retenix/ua':
+        specifier: workspace:^
+        version: link:../../packages/ua
       '@sentry/nextjs':
         specifier: ^10.64.0
         version: 10.64.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)(webpack@5.108.4)
@@ -43,6 +55,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.22.0)
       ethers:
         specifier: ^6
         version: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
