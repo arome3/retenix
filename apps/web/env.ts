@@ -62,3 +62,12 @@ export const env: z.infer<typeof serverSchema> = (() => {
   if (!parsed.success) invalid(issueNames(parsed.error));
   return parsed.data;
 })();
+
+// Gate for stubs that must never reach a real user: the eligibility pass-through
+// doc 04 replaces (doc 02). NODE_ENV is a build-time constant Next inlines, so a
+// production build can only ever evaluate this to false. Short-circuits before
+// touching `env`, which throws in the browser.
+export const devAffordances: boolean =
+  typeof window === "undefined" &&
+  process.env.NODE_ENV !== "production" &&
+  env.DEMO_MODE === "1";
