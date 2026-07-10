@@ -1,7 +1,15 @@
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
 import tseslint from "typescript-eslint";
 
-const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
+// eslint-config-next@16 ships native flat configs — scope them to the web
+// app subtree; bare global-ignore entries pass through untouched.
+const scopeToWeb = (configs) =>
+  configs.map((c) =>
+    Object.keys(c).length === 1 && c.ignores
+      ? c
+      : { ...c, files: ["apps/web/**/*.{js,jsx,ts,tsx}"] },
+  );
 
 export default tseslint.config(
   {
@@ -18,9 +26,8 @@ export default tseslint.config(
   },
 
   // apps/web — Next's canonical rules, scoped to the app subtree.
-  ...compat
-    .extends("next/core-web-vitals", "next/typescript")
-    .map((c) => ({ ...c, files: ["apps/web/**/*.{js,jsx,ts,tsx}"] })),
+  ...scopeToWeb(nextCoreWebVitals),
+  ...scopeToWeb(nextTypescript),
   {
     files: ["apps/web/**"],
     settings: { next: { rootDir: "apps/web/" } },

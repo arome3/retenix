@@ -18,12 +18,11 @@
     "check:pins": "node scripts/check-pins.mjs"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@playwright/test": "^1",
     "concurrently": "^10",
     "dotenv": "^17",
     "eslint": "^9",
-    "eslint-config-next": "15.5.20",
+    "eslint-config-next": "16.2.10",
     "typescript": "^5",
     "typescript-eslint": "^8",
     "vitest": "^4"
