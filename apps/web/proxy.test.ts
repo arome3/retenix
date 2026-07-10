@@ -61,10 +61,17 @@ describe("proxy — session with a region", () => {
     }
   });
 
-  it("sends a finished user off the onboarding screens", () => {
-    for (const path of ["/", "/welcome", "/otp", "/eligibility"]) {
+  it("sends a finished user off the onboarding entry screens", () => {
+    for (const path of ["/", "/welcome", "/otp"]) {
       expect(go(path, "session+region")).toBe("/home");
     }
+  });
+
+  // The gate reads users.region and sends a finished user onward itself. If the
+  // proxy also redirected away from it, a cookie that disagreed with the row
+  // would put the two redirects in an infinite loop.
+  it("never redirects away from the gate, whatever the cookie claims", () => {
+    expect(go("/eligibility", "session+region")).toBeNull();
   });
 });
 

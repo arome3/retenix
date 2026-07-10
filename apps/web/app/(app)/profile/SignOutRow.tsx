@@ -11,6 +11,8 @@ import { trpc } from "@/lib/trpc";
  * server can clear. The final navigation is a full load, not a client push, so
  * the react-query cache and every rendered balance leave with it.
  */
+const MAGIC_LOGOUT_TIMEOUT_MS = 3_000;
+
 export function SignOutRow() {
   const logout = trpc.auth.logout.useMutation();
   const [pending, setPending] = useState(false);
@@ -18,7 +20,12 @@ export function SignOutRow() {
   async function signOut() {
     setPending(true);
     try {
-      await magicLogout();
+      // A Magic outage must never trap someone in a session. Give it a moment,
+      // then clear our own cookie regardless.
+      await Promise.race([
+        magicLogout(),
+        new Promise((resolve) => setTimeout(resolve, MAGIC_LOGOUT_TIMEOUT_MS)),
+      ]);
     } catch {
       // Magic may already consider us signed out; the cookie still must go.
     }

@@ -26,6 +26,12 @@ importers:
       eslint-config-next:
         specifier: 16.2.10
         version: 16.2.10(@typescript-eslint/parser@8.63.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
+      pg:
+        specifier: ^8
+        version: 8.22.0
       typescript:
         specifier: ^5
         version: 5.9.3

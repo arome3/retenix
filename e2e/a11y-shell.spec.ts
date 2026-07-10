@@ -1,11 +1,31 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import {
+  closeDb,
+  createTestUser,
+  deleteTestUser,
+  signIn,
+  type TestUser,
+} from "./support/session";
 
 // Doc 01 definition of done: axe-core clean on the shell; keyboard tab order
 // walks Home→Activity→Agents→Profile. Run with the web app serving on
 // APP_BASE_URL (default http://localhost:3000): `pnpm --filter web dev`.
+//
+// The shell became authed in module 02, so these specs sign in first.
 
 const SHELL_ROUTES = ["/home", "/activity", "/agents", "/profile"];
+
+let user: TestUser;
+
+test.beforeEach(async ({ context }) => {
+  user = await createTestUser("US");
+  await signIn(context, user, "US");
+});
+test.afterEach(async () => {
+  await deleteTestUser(user);
+});
+test.afterAll(closeDb);
 
 // The compliance target is WCAG 2.2 AA (doc 01 §Accessibility baseline);
 // axe "best-practice" rules (e.g. page-has-heading-one on the not-yet-built

@@ -44,10 +44,15 @@ export function proxy(request: NextRequest) {
     return GATE.test(pathname) ? NextResponse.next() : to(ELIGIBILITY);
   }
 
-  // Onboarding is finished; its screens are no longer somewhere to be.
-  const isOnboarding =
-    pathname === "/" || ENTRY.test(pathname) || GATE.test(pathname);
-  return isOnboarding ? to(HOME) : NextResponse.next();
+  // The gate is never redirected away from, even when the cookie says it is
+  // done. Only the gate page reads users.region, and if it disagreed with the
+  // cookie the two redirects would chase each other forever. It sends a
+  // finished user onward itself.
+  if (GATE.test(pathname)) return NextResponse.next();
+
+  // Onboarding is over; its entry screens are no longer somewhere to be.
+  const isEntry = pathname === "/" || ENTRY.test(pathname);
+  return isEntry ? to(HOME) : NextResponse.next();
 }
 
 export const config = {

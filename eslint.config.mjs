@@ -70,6 +70,9 @@ export default tseslint.config(
       "**/*.test.{ts,tsx}",
       "**/*.spec.{ts,tsx}",
       "**/*.config.{js,mjs,cjs,ts,mts}",
+      // e2e harness: runs outside the apps, drives them over HTTP, and mints a
+      // session the way the server does (doc 02) rather than shipping a bypass.
+      "e2e/support/**/*.ts",
     ],
     rules: { "no-restricted-properties": "off" },
   },
