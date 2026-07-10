@@ -54,7 +54,7 @@ test("instrumentation: onboarding.started and onboarding.ready pair by sid", asy
     const ready = rows.find((r) => r.type === "onboarding.ready")!;
     expect(typeof ready.payload.elapsedMs).toBe("number");
     expect(ready.payload.elapsedMs).toBeGreaterThanOrEqual(0);
-  }).toPass({ timeout: 10_000 });
+  }).toPass({ timeout: 20_000 });
 
   await deleteEventsBySid(sid!);
   await deleteTestUser(user);

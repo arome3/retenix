@@ -37,7 +37,7 @@ test("sign out clears both cookies and closes the app", async ({ page, context }
   await page.goto("/profile");
   await page.getByRole("button", { name: "Sign out" }).click();
 
-  await expect(page).toHaveURL(/\/welcome$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/welcome$/, { timeout: 30_000 });
 
   const names = (await context.cookies()).map((c) => c.name);
   expect(names).not.toContain("retenix_session");

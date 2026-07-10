@@ -14,6 +14,11 @@ const baseURL = process.env.APP_BASE_URL ?? "http://localhost:3000";
 export default defineConfig({
   testDir: ".",
   use: { baseURL },
+  // The dev server compiles routes on demand. On a cold start, several workers
+  // each waiting on a first compile will blow the stock 30s/5s budgets — the
+  // tests should tolerate that, not race it.
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   webServer: {
     command: "pnpm --filter web dev",
     url: baseURL,

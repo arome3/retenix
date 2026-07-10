@@ -7,8 +7,24 @@ everything user-visible builds on it.
 - `pnpm --filter web dev` → http://localhost:3000
 - `/dev/tokens` — the token sheet (dev only): all primitives, type scale, and
   components in light/dark/±cvd
+- `/dev/7702-smoke` — gate G1 (dev only): `switchChain(42161)` then
+  `sign7702Authorization`, serialized the way doc 03 will. Sign in first.
 - `pnpm contrast` · `pnpm copy-canon` · `pnpm e2e` — the design-foundation CI
   gates (WCAG pairs, banned vocabulary, axe + keyboard walk)
+
+## Auth & session (module 02)
+
+- Real `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` and `MAGIC_SECRET_KEY` are required to
+  sign in. Add `localhost:3000` to the Magic dashboard allowlist or signing fails.
+- Set `DEMO_MODE=1` in `.env.local` to enable the eligibility gate's
+  pass-through, otherwise `/eligibility` dead-ends until doc 04 lands. It cannot
+  be enabled in a production build.
+- The session cookie is `Secure` even on `http://localhost`. Chromium and Firefox
+  treat localhost as a secure context; older Safari does not — develop against
+  Chromium or a TLS tunnel.
+- Magic's `testMode` is **not** used: it short-circuits Magic *links* only, never
+  email OTP. Dev points at a Magic dev app (testnet); the key selects the
+  environment, not an SDK flag.
 
 ## UI review checklist (every PR that renders numbers or copy)
 
