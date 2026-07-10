@@ -1,26 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { Bricolage_Grotesque, Geist_Mono, Onest } from "next/font/google";
 import Script from "next/script";
 import { ThemeHydration } from "@/components/ThemeHydration";
 import { Providers } from "./providers";
 import "./globals.css";
 
-// The three faces (design system §3), self-hosted via next/font — no
-// third-party font CDN at runtime. Their variables feed the §11 font tokens
-// (--font-display / --font-sans / --font-mono) in globals.css.
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-instrument-serif",
-  weight: "400",
+// The three faces (design system §3, revision 1.2 — owner-picked from a
+// four-way specimen), self-hosted via next/font — no third-party font CDN at
+// runtime. Their variables feed the §11 font tokens (--font-display /
+// --font-sans / --font-mono) in globals.css. Role-named variables so the next
+// face swap touches only this file and the token block.
+const displayFace = Bricolage_Grotesque({
+  variable: "--font-display-face",
+  subsets: ["latin"],
+  axes: ["opsz"], // optical sizing: display cuts at hero sizes, not scaled text
+});
+
+const uiSans = Onest({
+  variable: "--font-ui-sans",
   subsets: ["latin"],
 });
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dataMono = Geist_Mono({
+  variable: "--font-data-mono",
   subsets: ["latin"],
 });
 
@@ -82,7 +84,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${instrumentSerif.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${displayFace.variable} ${uiSans.variable} ${dataMono.variable} antialiased`}
       >
         <Script
           id="theme-init"

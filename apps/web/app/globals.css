@@ -44,8 +44,8 @@
   --color-destructive: var(--destructive);
   --color-agent: var(--primary);          /* agent ≡ brand */
   --color-border: var(--border);
-  --font-display: "Instrument Serif", serif;
-  --font-sans: "Geist", system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-sans: "Onest", system-ui, sans-serif;
   --font-mono: "Geist Mono", monospace;
   --radius-lg: var(--radius);
 }
@@ -120,10 +120,10 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-warning-foreground: var(--warning-foreground);
   /* next/font self-hosts under hashed family names, so the faces reach the
-     §11 font tokens through these variables (set on <html> in app/layout.tsx) */
-  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+     §11 font tokens through these variables (set on <body> in app/layout.tsx) */
+  --font-display: var(--font-display-face), system-ui, sans-serif;
+  --font-sans: var(--font-ui-sans), system-ui, sans-serif;
+  --font-mono: var(--font-data-mono), ui-monospace, monospace;
   /* radius scale derived from the single source (§4): cards lg, inputs/buttons
      md, pills full, sheet top xl */
   --radius-sm: calc(var(--radius) - 4px);
@@ -199,7 +199,7 @@
   body {
     /* the font variables live on <body> (app/layout.tsx) — <html> carries
        only the theme classes, owned by the init script + lib/theme.ts */
-    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    font-family: var(--font-ui-sans), system-ui, sans-serif;
     background-color: var(--background);
     color: var(--foreground);
     font-size: 1rem;
