@@ -12,7 +12,6 @@
     "@ai-sdk/anthropic": "^4.0.11",
     "@magic-ext/evm": "1.7.0",
     "@magic-sdk/admin": "2.8.2",
-    "@particle-network/universal-account-sdk": "2.0.3",
     "@retenix/db": "workspace:*",
     "@retenix/registry": "workspace:*",
     "@retenix/shared": "workspace:*",

@@ -69,6 +69,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: exact pins (doc 00 step 5, verbatim)
-        run: |
-          node -e "const w=require('./apps/web/package.json');for(const[k,v]of Object.entries({'@particle-network/universal-account-sdk':'2.0.3','magic-sdk':'33.9.0'})){const d={...w.dependencies,...w.devDependencies};if(d[k]&&d[k]!==v){console.error(k+' must be pinned to '+v);process.exit(1)}}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # doc 00 step 5 + doc 03 task 1: magic-sdk 33.9.0 in apps/web, UA SDK 2.0.3
+      # ONLY in packages/ua. The check reads only package.json (no install), and
+      # scripts/check-pins.mjs is the single source of truth (no drift).
+      - name: exact pins
+        run: node scripts/check-pins.mjs

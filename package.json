@@ -31,5 +31,10 @@
     "typescript": "^5",
     "typescript-eslint": "^8",
     "vitest": "^4"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@particle-network/universal-account-sdk@2.0.3": "patches/@particle-network__universal-account-sdk@2.0.3.patch"
+    }
   }
 }
