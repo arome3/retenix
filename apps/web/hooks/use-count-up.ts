@@ -41,27 +41,24 @@ export function useCountUp(
   value: number,
   { duration = 400, sessionKey }: CountUpOptions = {},
 ): number {
-  const shouldAnimateRef = useRef<boolean | null>(null);
-  if (shouldAnimateRef.current === null) {
-    shouldAnimateRef.current =
-      typeof window !== "undefined" &&
-      !prefersReducedMotion() &&
-      (sessionKey === undefined || !playedKeys.has(sessionKey));
-  }
-
-  const [display, setDisplay] = useState(
-    shouldAnimateRef.current ? 0 : value,
-  );
+  // Initial render always shows the final value — identical on server and
+  // client, so SSR hydration never sees mismatched text. The animation (from
+  // 0) starts in the effect, after first paint.
+  const [display, setDisplay] = useState(value);
+  const playedRef = useRef(false);
   const targetRef = useRef(value);
   targetRef.current = value;
 
   useEffect(() => {
-    if (!shouldAnimateRef.current) {
+    const alreadyPlayed =
+      playedRef.current ||
+      (sessionKey !== undefined && playedKeys.has(sessionKey));
+    if (alreadyPlayed || prefersReducedMotion()) {
       // once-per-session already spent (or reduced motion): snap on updates
       setDisplay(targetRef.current);
       return;
     }
-    shouldAnimateRef.current = false;
+    playedRef.current = true;
     if (sessionKey !== undefined) playedKeys.add(sessionKey);
 
     let raf = 0;

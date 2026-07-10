@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import Script from "next/script";
+import { ThemeHydration } from "@/components/ThemeHydration";
 import "./globals.css";
 
 // The three faces (design system §3), self-hosted via next/font — no
@@ -72,16 +74,23 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Theme classes (`dark`/`cvd`) live on <html>, owned exclusively by the
+  // init script + lib/theme.ts. React renders NO className there — hydration
+  // would clobber script-applied classes otherwise — so the font variables
+  // (inherited custom properties) sit on <body> instead.
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${instrumentSerif.variable} ${geistSans.variable} ${geistMono.variable}`}
-    >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
-      </head>
-      <body className="antialiased">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${instrumentSerif.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeInit }}
+        />
+        <ThemeHydration />
+        {children}
+      </body>
     </html>
   );
 }

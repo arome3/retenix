@@ -126,6 +126,45 @@ export function registerThemeMirror(fn: Listener | null): void {
   mirror = fn;
 }
 
+/** Route-default logic — must stay in sync with the pre-paint init script in
+ *  app/layout.tsx: /claim is forced light, onboarding/marketing default
+ *  light, everything else defaults dark. */
+export function routeDefaults(pathname: string): {
+  forcedLight: boolean;
+  defaultMode: ThemeMode;
+} {
+  const forcedLight =
+    pathname === "/claim" || pathname.startsWith("/claim/");
+  const lightDefault =
+    forcedLight ||
+    pathname === "/" ||
+    /^\/(welcome|otp|eligibility)(\/|$)/.test(pathname);
+  return { forcedLight, defaultMode: lightDefault ? "light" : "dark" };
+}
+
+/**
+ * Recomputes and applies the theme for the current route: stored preference
+ * first, route default otherwise, /claim always light. Idempotent — the
+ * root-mounted ThemeHydration runs it after hydration (React re-committing
+ * <html> must never be able to strand a stale class) and on navigation.
+ */
+export function reapplyTheme(pathname: string): void {
+  const el = root();
+  if (!el) return;
+  const { forcedLight: forcedRoute, defaultMode } = routeDefaults(pathname);
+  const stored = readStoredMode();
+  const dark =
+    forcedRoute || forcedLightCount > 0
+      ? false
+      : stored !== null
+        ? stored === "dark"
+        : defaultMode === "dark";
+  el.classList.toggle("dark", dark);
+  const cvd = readStoredCvd();
+  if (cvd !== null) el.classList.toggle("cvd", cvd);
+  emit();
+}
+
 /** Applies a route-group default without persisting — only when the user has
  *  no stored preference. Client-side navigations re-run this via ThemeScope. */
 export function applyDefaultMode(mode: ThemeMode): void {
