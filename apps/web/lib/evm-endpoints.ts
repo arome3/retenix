@@ -42,3 +42,16 @@ export const EVM_ENDPOINTS: EvmEndpoint[] = [
 
 export const DEFAULT_EVM_ENDPOINT: EvmEndpoint =
   EVM_ENDPOINTS.find((n) => n.default) ?? EVM_ENDPOINTS[0];
+
+/**
+ * What the Magic constructor's endpoint option accepts: CustomNodeConfiguration,
+ * which has no `default` key. That key belongs to the extension array entries.
+ *
+ * Passing an endpoint straight through would smuggle `default: true` into the
+ * hash Magic derives and into its iframe params. TypeScript permits it, because
+ * excess-property checking fires on object literals, never on a variable.
+ */
+export const DEFAULT_MAGIC_NETWORK: { rpcUrl: string; chainId: number } = {
+  rpcUrl: DEFAULT_EVM_ENDPOINT.rpcUrl,
+  chainId: DEFAULT_EVM_ENDPOINT.chainId,
+};

@@ -28,7 +28,7 @@
 import { EVMExtension } from "@magic-ext/evm"; // 1.7.0 EXACT (doc 00)
 import { Magic, type InstanceWithExtensions, type SDKBase } from "magic-sdk"; // 33.9.0 EXACT (doc 00)
 import { clientEnv } from "@/env";
-import { DEFAULT_EVM_ENDPOINT, EVM_ENDPOINTS } from "./evm-endpoints";
+import { DEFAULT_MAGIC_NETWORK, EVM_ENDPOINTS } from "./evm-endpoints";
 
 export type RetenixMagic = InstanceWithExtensions<SDKBase, EVMExtension[]>;
 
@@ -45,7 +45,7 @@ export function getMagic(): RetenixMagic {
     );
   }
   instance ??= new Magic(clientEnv.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY, {
-    network: DEFAULT_EVM_ENDPOINT,
+    network: DEFAULT_MAGIC_NETWORK,
     extensions: [new EVMExtension(EVM_ENDPOINTS)],
   });
   return instance;
