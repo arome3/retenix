@@ -20,6 +20,7 @@
     "copy-canon": "node scripts/copy-canon.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1",
     "concurrently": "^10",
     "dotenv": "^17",

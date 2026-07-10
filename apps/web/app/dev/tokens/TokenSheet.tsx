@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMounted } from "@/hooks/use-mounted";
 import {
   BrokerAvatar,
   ContinuityAvatar,
@@ -150,8 +151,8 @@ export function TokenSheet() {
   const prefs = useThemePrefs();
   // time samples render only after mount — `new Date()` during SSR would
   // hydrate against a different clock and mismatch
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => setNow(new Date()), []);
+  const mounted = useMounted();
+  const now = mounted ? new Date() : null;
 
   return (
     <TooltipProvider>

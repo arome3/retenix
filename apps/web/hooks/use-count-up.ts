@@ -47,9 +47,9 @@ export function useCountUp(
   const [display, setDisplay] = useState(value);
   const playedRef = useRef(false);
   const targetRef = useRef(value);
-  targetRef.current = value;
 
   useEffect(() => {
+    targetRef.current = value;
     const alreadyPlayed =
       playedRef.current ||
       (sessionKey !== undefined && playedKeys.has(sessionKey));

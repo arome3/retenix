@@ -33,10 +33,15 @@ export default tseslint.config(
     settings: { next: { rootDir: "apps/web/" } },
   },
 
-  // worker + packages + e2e — typescript-eslint (type errors are tsc -b's job).
+  // worker + packages + e2e + scripts — typescript-eslint (type errors are tsc -b's job).
   ...tseslint.configs.recommended.map((c) => ({
     ...c,
-    files: ["apps/worker/**/*.ts", "packages/**/*.ts", "e2e/**/*.ts"],
+    files: [
+      "apps/worker/**/*.ts",
+      "packages/**/*.ts",
+      "e2e/**/*.ts",
+      "scripts/**/*.ts",
+    ],
   })),
 
   // Env discipline (doc 00): every env read goes through the typed env module.

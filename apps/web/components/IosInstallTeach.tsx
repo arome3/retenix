@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Share, SquarePlus, X } from "lucide-react";
+import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
 
 // iOS install is manual (§App shell & PWA): one card, two steps, shown once.
@@ -47,25 +48,31 @@ export function IosInstallTeach({
   className?: string;
   onDismiss?: () => void;
 }) {
-  const [visible, setVisible] = useState(false);
+  const mounted = useMounted();
+  const [dismissedNow, setDismissedNow] = useState(false);
 
-  useEffect(() => {
-    if (force) {
-      setVisible(true);
-      return;
-    }
+  // client-only checks run after mount (SSR renders nothing for the
+  // organic card; `force` renders on both passes identically)
+  const storedDismissed = (): boolean => {
     try {
-      if (localStorage.getItem(DISMISS_KEY) === "1") return;
+      return localStorage.getItem(DISMISS_KEY) === "1";
     } catch {
-      // private mode — show; dismissal just won't persist
+      return false; // private mode — show; dismissal just won't persist
     }
-    if (isIos() && !isStandalone()) setVisible(true);
-  }, [force]);
+  };
+
+  const visible =
+    force ||
+    (mounted &&
+      !dismissedNow &&
+      !storedDismissed() &&
+      isIos() &&
+      !isStandalone());
 
   if (!visible) return null;
 
   const dismiss = () => {
-    setVisible(false);
+    setDismissedNow(true);
     try {
       localStorage.setItem(DISMISS_KEY, "1");
     } catch {
