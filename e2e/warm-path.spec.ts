@@ -5,6 +5,7 @@ import {
   deleteEventsBySid,
   deleteTestUser,
   readOnboardingEvents,
+  readRealOnboardingReady,
   signIn,
 } from "./support/session";
 
@@ -60,19 +61,20 @@ test("instrumentation: onboarding.started and onboarding.ready pair by sid", asy
   await deleteTestUser(user);
 });
 
-test("PS-F1-AC1: the newest recorded onboarding finished under 60s", async () => {
-  const rows = await readOnboardingEvents();
-  const ready = rows.find(
-    (r) => r.type === "onboarding.ready" && typeof r.payload.elapsedMs === "number",
-  );
+test("PS-F1-AC1: the newest real onboarding finished under 60s", async () => {
+  // Deliberately not "the newest row": the spec above fabricates one, and a
+  // synthetic number reported as the measured warm path would be a lie.
+  const ready = await readRealOnboardingReady();
 
   test.skip(
     !ready,
-    "No completed onboarding recorded yet. Run one real email-OTP login " +
-      "(Magic keys required — its OTP cannot be scripted), then re-run.",
+    "No real onboarding recorded yet. Sign in once with a real email " +
+      "(Magic's OTP lands in an inbox and cannot be scripted), then re-run.",
   );
 
   const elapsedMs = ready!.payload.elapsedMs!;
-  console.log(`warm path: ${(elapsedMs / 1000).toFixed(1)}s (budget 60s)`);
+  console.log(
+    `\n  PS-F1-AC1 warm path: ${(elapsedMs / 1000).toFixed(1)}s  (budget 60s)\n`,
+  );
   expect(elapsedMs).toBeLessThan(AC1_BUDGET_MS);
 });

@@ -149,3 +149,29 @@ export async function readOnboardingEvents(sid?: string): Promise<OnboardingEven
 export async function deleteEventsBySid(sid: string): Promise<void> {
   await db().query("delete from events where payload_json->>'sid' = $1", [sid]);
 }
+
+/*
+ * The newest onboarding.ready belonging to a *real* user (PS-F1-AC1).
+ *
+ * The instrumentation spec fabricates its own ready row, so "newest row" would
+ * happily report a synthetic number as the measured warm path. Every e2e user
+ * carries an `0xe2e` email_hash prefix; a real one is a sha256 digest.
+ */
+export async function readRealOnboardingReady(): Promise<OnboardingEvent | null> {
+  const { rows } = await db().query(
+    `select e.type, e.created_at, e.payload_json
+       from events e
+       join users u on u.id = e.user_id
+      where e.type = 'onboarding.ready'
+        and u.email_hash not like '0xe2e%'
+        and e.payload_json->>'elapsedMs' is not null
+      order by e.created_at desc
+      limit 1`,
+  );
+  if (rows.length === 0) return null;
+  return {
+    type: rows[0].type as string,
+    createdAt: rows[0].created_at as Date,
+    payload: rows[0].payload_json as OnboardingEvent["payload"],
+  };
+}
