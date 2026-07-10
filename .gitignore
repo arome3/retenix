@@ -24,3 +24,7 @@ test-results/
 # misc
 .DS_Store
 *.log
+
+# plans & module prompts — local only (owner decision 2026-07-10); the folder
+# stays on disk and in editor search, it just never enters version control
+/docs/
