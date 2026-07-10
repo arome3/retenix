@@ -60,6 +60,22 @@ export async function deleteTestUser(user: TestUser): Promise<void> {
   await db().query("delete from users where id = $1", [user.userId]);
 }
 
+/*
+ * Safety net for the rows a test that dies mid-body never got to delete. Every
+ * e2e user is minted with an `0xe2e` email_hash prefix, which a sha256 digest of
+ * a real address will not collide with in any run that matters.
+ */
+export async function sweepTestUsers(): Promise<number> {
+  await db().query(
+    `delete from events
+      where user_id in (select id from users where email_hash like '0xe2e%')`,
+  );
+  const { rowCount } = await db().query(
+    "delete from users where email_hash like '0xe2e%'",
+  );
+  return rowCount ?? 0;
+}
+
 export async function closeDb(): Promise<void> {
   await pool?.end();
   pool = undefined;

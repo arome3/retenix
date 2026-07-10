@@ -153,25 +153,27 @@ test.describe("copy canon over rendered HTML", () => {
     context,
   }) => {
     const user = await createTestUser("US");
-    await signIn(context, user, "US");
+    try {
+      await signIn(context, user, "US");
 
-    // /welcome and /otp are checked without a session, since a finished user is
-    // redirected off them.
-    const gated = ["/ready", "/profile", "/profile/export"];
-    for (const route of gated) {
-      await page.goto(route);
-      const html = await page.content();
-      expect(html, `${route} must never contain "seed phrase"`).not.toMatch(
-        /seed[\s-]?phrase/i,
-      );
-      const text = (await page.locator("body").innerText()).replace(/\s+/g, " ");
-      for (const pattern of BANNED) {
-        expect(text, `${route} violates ${pattern}`).not.toMatch(pattern);
+      // /welcome and /otp are checked without a session, since a finished user is
+      // redirected off them.
+      const gated = ["/ready", "/profile", "/profile/export"];
+      for (const route of gated) {
+        await page.goto(route);
+        const html = await page.content();
+        expect(html, `${route} must never contain "seed phrase"`).not.toMatch(
+          /seed[\s-]?phrase/i,
+        );
+        const text = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+        for (const pattern of BANNED) {
+          expect(text, `${route} violates ${pattern}`).not.toMatch(pattern);
+        }
+        expect(await page.locator("select").count(), `${route} offers a choice`).toBe(0);
       }
-      expect(await page.locator("select").count(), `${route} offers a choice`).toBe(0);
+    } finally {
+      await deleteTestUser(user);
     }
-
-    await deleteTestUser(user);
     await context.clearCookies();
 
     for (const route of ["/welcome", "/otp"]) {
@@ -220,12 +222,15 @@ test.describe("accessibility", () => {
     context,
   }) => {
     const user = await createTestUser("US");
-    await signIn(context, user, "US");
-    for (const route of ["/ready", "/profile", "/profile/export"]) {
-      await page.goto(route);
-      await page.waitForLoadState("networkidle");
-      expect((await axe(page).analyze()).violations, `${route}`).toEqual([]);
+    try {
+      await signIn(context, user, "US");
+      for (const route of ["/ready", "/profile", "/profile/export"]) {
+        await page.goto(route);
+        await page.waitForLoadState("networkidle");
+        expect((await axe(page).analyze()).violations, `${route}`).toEqual([]);
+      }
+    } finally {
+      await deleteTestUser(user);
     }
-    await deleteTestUser(user);
   });
 });
