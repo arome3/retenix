@@ -22,6 +22,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # doc 01: token-pair WCAG ratios (4.5:1 text / 3:1 non-text)
+      - run: pnpm contrast
+      # doc 01 / G12: banned vocabulary in user copy is a release blocker
+      - run: pnpm copy-canon
 
   unit:
     runs-on: ubuntu-latest
