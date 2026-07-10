@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import Script from "next/script";
 import { ThemeHydration } from "@/components/ThemeHydration";
+import { Providers } from "./providers";
 import "./globals.css";
 
 // The three faces (design system §3), self-hosted via next/font — no
@@ -53,7 +54,7 @@ const themeInit = `(function () {
     var d = document.documentElement;
     var p = location.pathname;
     var forcedLight = p === "/claim" || p.indexOf("/claim/") === 0;
-    var lightDefault = forcedLight || p === "/" || /^\\/(welcome|otp|eligibility)(\\/|$)/.test(p);
+    var lightDefault = forcedLight || p === "/" || /^\\/(welcome|otp|eligibility|ready)(\\/|$)/.test(p);
     var mode = null, cvd = null;
     try {
       mode = localStorage.getItem("retenix:theme");
@@ -89,7 +90,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeInit }}
         />
         <ThemeHydration />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

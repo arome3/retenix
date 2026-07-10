@@ -11,6 +11,16 @@
  * against Chromium or a TLS tunnel.
  */
 
+export const SESSION_COOKIE = "retenix_session";
+
+/*
+ * Presence-only routing hint for proxy.ts, which runs where neither
+ * SESSION_SECRET nor the database is reachable. Never an authorization decision.
+ * The names live here rather than in session.ts so the proxy can read them
+ * without dragging in the typed env module.
+ */
+export const GATE_COOKIE = "retenix_gate";
+
 export type CookieOptions = {
   /** Seconds. Zero expires the cookie immediately. */
   maxAge: number;

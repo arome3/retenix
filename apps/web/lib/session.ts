@@ -15,15 +15,9 @@
  */
 import { SignJWT, jwtVerify } from "jose";
 import { env } from "@/env";
-import { serializeCookie } from "./cookies";
+import { GATE_COOKIE, SESSION_COOKIE, serializeCookie } from "./cookies";
 
-export const SESSION_COOKIE = "retenix_session";
-
-/*
- * Presence-only routing hint for the proxy, which runs where neither the secret
- * nor the database is reachable. Never an authorization decision.
- */
-export const GATE_COOKIE = "retenix_gate";
+export { GATE_COOKIE, SESSION_COOKIE };
 
 const ALG = "HS256";
 export const SESSION_TTL_SECS = 7 * 24 * 60 * 60;

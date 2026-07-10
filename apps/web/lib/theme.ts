@@ -138,7 +138,7 @@ export function routeDefaults(pathname: string): {
   const lightDefault =
     forcedLight ||
     pathname === "/" ||
-    /^\/(welcome|otp|eligibility)(\/|$)/.test(pathname);
+    /^\/(welcome|otp|eligibility|ready)(\/|$)/.test(pathname);
   return { forcedLight, defaultMode: lightDefault ? "light" : "dark" };
 }
 
