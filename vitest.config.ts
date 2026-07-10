@@ -44,6 +44,13 @@ export default defineConfig({
         },
       },
       {
+        test: {
+          name: "ua",
+          environment: "node",
+          include: ["packages/ua/src/**/*.test.ts"],
+        },
+      },
+      {
         resolve: { alias: { "@": webDir } },
         test: {
           name: "web",
