@@ -105,8 +105,11 @@ test.describe("S1 · gated screens", () => {
 
   test("a region-less session reaches only the gate", async ({ page }) => {
     await page.goto("/home");
-    await expect(page).toHaveURL(/\/eligibility$/);
-    await expect(page.getByRole("heading", { name: "One quick check" })).toBeVisible();
+    // The gate root forwards into step 1 (doc 04 owns the gate content now).
+    await expect(page).toHaveURL(/\/eligibility\/region$/);
+    await expect(
+      page.getByRole("heading", { name: "Where are you investing from?" }),
+    ).toBeVisible();
   });
 });
 

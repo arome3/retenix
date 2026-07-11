@@ -86,6 +86,15 @@ export async function setRegion(user: TestUser, region: string): Promise<void> {
   await db().query("update users set region = $1 where id = $2", [region, user.userId]);
 }
 
+/** The stored region — "" until the eligibility gate finalizes (doc 04). */
+export async function readRegion(user: TestUser): Promise<string> {
+  const { rows } = await db().query<{ region: string }>(
+    "select region from users where id = $1",
+    [user.userId],
+  );
+  return rows[0]?.region ?? "";
+}
+
 export async function signIn(
   context: BrowserContext,
   user: TestUser,

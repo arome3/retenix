@@ -54,10 +54,11 @@ test("the database, not the cookie, decides whether the gate has run", async ({
   await page.goto("/home");
   await expect(page).toHaveURL(/\/home$/);
 
-  // The cookie still claims a region; the row no longer has one.
+  // The cookie still claims a region; the row no longer has one. requireSession
+  // re-reads the row and bounces to the gate, which forwards into step 1 (doc 04).
   await setRegion(user, "");
   await page.goto("/home");
-  await expect(page).toHaveURL(/\/eligibility$/);
+  await expect(page).toHaveURL(/\/eligibility\/region$/);
 });
 
 test("a session whose user is gone is ended, not bounced forever", async ({ page }) => {
