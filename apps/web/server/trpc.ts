@@ -1,11 +1,11 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { events, type Db } from "@retenix/db";
+import { events, users, type Db } from "@retenix/db";
 import {
   buildSignedMessage,
   computeInputHash,
   sigEnvelopeSchema,
 } from "@retenix/shared";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { verifyMessage } from "ethers";
 import { z } from "zod";
 import type { Context } from "./context";
@@ -28,6 +28,38 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in required" });
   }
   return next({ ctx: { ...ctx, session: ctx.session } });
+});
+
+// ---------------------------------------------------------------------------
+// gatedProcedure — protected PLUS a passed eligibility gate (doc 04, layer 2).
+//
+// This is the second of the two deep-link-proof layers (the first is proxy.ts
+// on page routes). middleware bypass ≠ data access: even a request that skips
+// the edge must not touch an asset route without a completed gate. The region
+// column is written "" until the gate finishes (doc 04's finalization), so
+// region !== "" IS gatePassed. Read it from the DB per request — the JWT claim
+// is unforgeable but can go stale (region is a support-changeable field), and
+// the spec's discipline is "authoritative checks server-side per request".
+//
+// Every asset/portfolio/intent route (docs 05+) composes off this, NOT plain
+// protectedProcedure. account.bootstrap is the deliberate exception: it runs
+// pre-gate (lib/post-login.ts), so it stays protectedProcedure.
+// ---------------------------------------------------------------------------
+export const gatedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const [row] = await ctx.db
+    .select({ region: users.region })
+    .from(users)
+    .where(eq(users.id, ctx.session.userId))
+    .limit(1);
+  if (!row || !row.region) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "eligibility gate not completed",
+    });
+  }
+  return next({
+    ctx: { ...ctx, session: { ...ctx.session, region: row.region } },
+  });
 });
 
 // ---------------------------------------------------------------------------

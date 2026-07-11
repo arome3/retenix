@@ -2,14 +2,17 @@ import { users } from "@retenix/db";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc";
+import { gatedProcedure, protectedProcedure, router } from "../trpc";
 
 // A base58 Solana address: 32 bytes → 32–44 base58 chars (alphabet excludes 0 O I l).
 const SOLANA_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export const accountRouter = router({
-  // Buying power + breakdown (module 06).
-  summary: protectedProcedure.query(() => {
+  // Buying power + breakdown (module 06). An asset-data route, so it sits behind
+  // the eligibility gate (doc 04, layer 2): a region-less session gets FORBIDDEN,
+  // not data. Docs 05+ likewise use gatedProcedure for asset routes — NOT plain
+  // protectedProcedure, and NOT bootstrap (which must run pre-gate, below).
+  summary: gatedProcedure.query(() => {
     throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "account.summary — module 06" });
   }),
 
