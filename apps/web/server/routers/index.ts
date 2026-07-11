@@ -2,6 +2,7 @@ import { router } from "../trpc";
 import { accountRouter } from "./account";
 import { activityRouter } from "./activity";
 import { authRouter } from "./auth";
+import { complianceRouter } from "./compliance";
 import { estateRouter } from "./estate";
 import { intentRouter } from "./intent";
 import { killRouter } from "./kill";
@@ -14,6 +15,7 @@ import { sweepRouter } from "./sweep";
 // owner module — names and procedure classes never change.
 export const appRouter = router({
   auth: authRouter,
+  compliance: complianceRouter,
   account: accountRouter,
   sweep: sweepRouter,
   intent: intentRouter,

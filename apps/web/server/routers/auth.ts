@@ -3,11 +3,10 @@ import { events, users } from "@retenix/db";
 import { and, eq, sql } from "drizzle-orm";
 import { getAddress } from "ethers";
 import { z } from "zod";
-import { devAffordances } from "@/env";
 import { hashEmail } from "@/lib/emailHash";
 import { getMagicAdmin } from "../magic-admin";
 import { clearSessionCookie, setSessionCookie } from "../session";
-import { protectedProcedure, publicProcedure, router } from "../trpc";
+import { publicProcedure, router } from "../trpc";
 
 /*
  * DID tokens are the only client-to-server identity claim. A publicAddress sent
@@ -144,30 +143,5 @@ export const authRouter = router({
         payloadJson: { sid: input.sid, elapsedMs },
       });
       return { ok: true, elapsedMs };
-    }),
-
-  /*
-   * TODO(doc 04): delete this, and the Continue button that calls it, once the
-   * eligibility gate lands — doc 04 owns the region model. It exists only so S1
-   * is walkable end to end before then, and it cannot run in a production build.
-   */
-  devSetRegion: protectedProcedure
-    .input(z.object({ region: z.string().regex(/^[A-Z]{2}$/) }))
-    .mutation(async ({ input, ctx }) => {
-      if (!devAffordances) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "not available" });
-      }
-      await ctx.db
-        .update(users)
-        .set({ region: input.region })
-        .where(eq(users.id, ctx.session.userId));
-
-      await setSessionCookie(ctx, {
-        userId: ctx.session.userId,
-        eoa: ctx.session.eoaAddr,
-        issuer: ctx.session.issuer,
-        region: input.region,
-      });
-      return { region: input.region };
     }),
 });
