@@ -14,20 +14,51 @@ const GOLDEN_MINTS: Record<string, string> = {
   qqqx: "Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ",
 };
 
+// The 5 TO PIN mints verified 2026-07-12 (≥2 independent sources; see the
+// evidence comments in assets.ts). Golden-pinned here too so an accidental edit
+// forces a re-run of the verification procedure (the PR-checklist rule).
+const VERIFIED_TO_PIN_MINTS: Record<string, string> = {
+  msftx: "XspzcW1PRtgf6Wj92HCiZdjzKCyFekVD8P5Ueh3dRMX",
+  amznx: "Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg",
+  googlx: "XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN",
+  metax: "Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu",
+  mstrx: "XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ",
+};
+
+const ALL_EQUITY_MINTS: Record<string, string> = {
+  ...GOLDEN_MINTS,
+  ...VERIFIED_TO_PIN_MINTS,
+};
+
 const byId = (id: string) => REGISTRY.find((a) => a.id === id);
 
 describe("golden pins (defense against accidental assets.ts edits)", () => {
   it.each(Object.entries(GOLDEN_MINTS))(
-    "%s mint matches the pinned address byte-for-byte",
+    "spec-pinned %s mint matches byte-for-byte",
     (id, address) => {
       expect(byId(id)?.address).toBe(address);
     },
   );
 
-  it("every pinned equity mint starts with the Xs prefix", () => {
-    for (const address of Object.values(GOLDEN_MINTS)) {
+  it.each(Object.entries(VERIFIED_TO_PIN_MINTS))(
+    "verified TO-PIN %s mint matches byte-for-byte",
+    (id, address) => {
+      expect(byId(id)?.address).toBe(address);
+    },
+  );
+
+  it("every equity mint starts with the Xs prefix and is valid base58", () => {
+    for (const address of Object.values(ALL_EQUITY_MINTS)) {
       expect(address.startsWith("Xs")).toBe(true);
+      expect(address).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
     }
+  });
+
+  it("REGISTRY's equity set is exactly the golden + verified mints (no extras)", () => {
+    const registryEquityMints = REGISTRY.filter((a) => a.kind === "equity")
+      .map((a) => a.address)
+      .sort();
+    expect(registryEquityMints).toEqual(Object.values(ALL_EQUITY_MINTS).sort());
   });
 
   it("SOL and ETH use the 0x00…00 native sentinel on their chains", () => {

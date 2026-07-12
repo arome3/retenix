@@ -120,11 +120,78 @@ export const REGISTRY: readonly RegistryAsset[] = [
     eligibleRegions: "ALL",
   },
 
-  // ── TO PIN (msftx / amznx / googlx / metax / mstrx) ──
-  // Appended ONLY after the doc-05 verification procedure (≥2 independent
-  // sources + `Xs` prefix + real liquidity), each with an evidence comment.
-  // Unverifiable tickers stay ABSENT — never guessed. The launch set does not
-  // require all ten.
+  // ── Verified TO PIN — appended after the doc-05 procedure (verified 2026-07-12):
+  //    ≥2 independent sources, `Xs` prefix, real Raydium/Jupiter liquidity, issuer
+  //    Backed. Source 1 for all five is the k.co.cr xStocks table, PROVEN reliable
+  //    because its TSLAx/AAPLx/NVDAx/SPYx/QQQx match tech-spec §3 byte-for-byte.
+  //    A registry PR changing any address below MUST re-run this procedure. ──
+
+  // MSFTx · Microsoft. src2: Solflare stock page URL embedding the mint —
+  // solflare.com/stocks/microsoft-xstock/XspzcW1PRtgf6Wj92HCiZdjzKCyFekVD8P5Ueh3dRMX/
+  {
+    id: "msftx",
+    ticker: "MSFTx",
+    name: "Microsoft (tokenized)",
+    kind: "equity",
+    chainId: 101,
+    address: "XspzcW1PRtgf6Wj92HCiZdjzKCyFekVD8P5Ueh3dRMX",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: stockDisclosure("MSFTx", "Microsoft"),
+    issuer: "Backed",
+  },
+  // AMZNx · Amazon. src2: Bitget web3 swap URL —
+  // web3.bitget.com/en/swap/sol/Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg ;
+  // src3: CoinGecko (issuer Backed Finance, active Raydium CLMM liquidity).
+  {
+    id: "amznx",
+    ticker: "AMZNx",
+    name: "Amazon (tokenized)",
+    kind: "equity",
+    chainId: 101,
+    address: "Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: stockDisclosure("AMZNx", "Amazon"),
+    issuer: "Backed",
+  },
+  // GOOGLx · Alphabet. src2: Solflare price page URL ("verified on Solana's token
+  // registry") — solflare.com/prices/alphabet-xstock/XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN/
+  {
+    id: "googlx",
+    ticker: "GOOGLx",
+    name: "Alphabet (tokenized)",
+    kind: "equity",
+    chainId: 101,
+    address: "XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: stockDisclosure("GOOGLx", "Alphabet"),
+    issuer: "Backed",
+  },
+  // METAx · Meta. src2: Solflare stock + price page URLs —
+  // solflare.com/stocks/meta-xstock/Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu/
+  {
+    id: "metax",
+    ticker: "METAx",
+    name: "Meta (tokenized)",
+    kind: "equity",
+    chainId: 101,
+    address: "Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: stockDisclosure("METAx", "Meta"),
+    issuer: "Backed",
+  },
+  // MSTRx · MicroStrategy (Strategy). src2: Solflare stock + price page URLs;
+  // src3: Solana Compass — solanacompass.com/tokens/XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ
+  {
+    id: "mstrx",
+    ticker: "MSTRx",
+    name: "MicroStrategy (tokenized)",
+    kind: "equity",
+    chainId: 101,
+    address: "XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: stockDisclosure("MSTRx", "MicroStrategy"),
+    issuer: "Backed",
+  },
 ];
 
 export const REGISTRY_IDS = REGISTRY.map((a) => a.id) as [string, ...string[]]; // doc 09 z.enum input
