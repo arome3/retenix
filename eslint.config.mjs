@@ -67,10 +67,11 @@ export default tseslint.config(
       "apps/worker/env.ts",
       "packages/db/src/client.ts",
       "packages/db/drizzle.config.ts",
-      // Sanctioned CLI entry: the $1 mainnet convert smoke (doc 03) reads
-      // SMOKE_WALLET_PRIVATE_KEY / SMOKE_CONVERT_USD / PARTICLE_* directly, like a
-      // config/tooling script rather than app runtime.
+      // Sanctioned CLI entries: the $1 mainnet convert smoke (doc 03) and the $5
+      // SPYx G2 buy (doc 05) read SMOKE_WALLET_PRIVATE_KEY / PARTICLE_* directly,
+      // like config/tooling scripts rather than app runtime.
       "packages/ua/scripts/**/*.ts",
+      "packages/registry/scripts/**/*.ts",
       "**/*.test.{ts,tsx}",
       "**/*.spec.{ts,tsx}",
       "**/*.config.{js,mjs,cjs,ts,mts}",
