@@ -11,7 +11,9 @@
   "dependencies": {
     "@aws-sdk/client-kms": "^3",
     "@retenix/db": "workspace:*",
+    "@retenix/registry": "workspace:*",
     "@retenix/shared": "workspace:*",
+    "@retenix/ua": "workspace:*",
     "@sentry/node": "^10",
     "ethers": "^6",
     "node-cron": "^4",

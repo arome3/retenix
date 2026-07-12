@@ -207,7 +207,7 @@ export function OtpFlow() {
         onSession: (session) => {
           forgetOnboardingEmail();
           // Doc 03's UA init and doc 05's warm-up start now, awaited by nobody.
-          onSessionEstablished(session.eoa);
+          onSessionEstablished(session.eoa, session.region);
           router.replace(session.region ? "/ready" : "/eligibility");
         },
       });
