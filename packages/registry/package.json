@@ -9,9 +9,18 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "buy:g2": "tsx scripts/buy-g2.ts"
+  },
+  "dependencies": {
+    "@retenix/shared": "workspace:*",
+    "@retenix/ua": "workspace:*",
+    "ethers": "^6"
   },
   "devDependencies": {
-    "typescript": "^5"
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^4"
   }
 }

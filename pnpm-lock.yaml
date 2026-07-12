@@ -167,9 +167,15 @@ importers:
       '@retenix/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@retenix/registry':
+        specifier: workspace:*
+        version: link:../../packages/registry
       '@retenix/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@retenix/ua':
+        specifier: workspace:*
+        version: link:../../packages/ua
       '@sentry/node':
         specifier: ^10
         version: 10.64.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))
@@ -225,10 +231,29 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.0))
 
   packages/registry:
+    dependencies:
+      '@retenix/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@retenix/ua':
+        specifier: workspace:*
+        version: link:../ua
+      ethers:
+        specifier: ^6
+        version: 6.17.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.7.5
+      tsx:
+        specifier: ^4
+        version: 4.23.0
       typescript:
         specifier: ^5
         version: 5.9.3
+      vitest:
+        specifier: ^4
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.7.5)(vite@8.1.4(@types/node@22.7.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.0))
 
   packages/shared:
     dependencies:
