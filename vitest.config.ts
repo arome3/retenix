@@ -51,6 +51,13 @@ export default defineConfig({
         },
       },
       {
+        test: {
+          name: "registry",
+          environment: "node",
+          include: ["packages/registry/src/**/*.test.ts"],
+        },
+      },
+      {
         resolve: { alias: { "@": webDir } },
         test: {
           name: "web",
