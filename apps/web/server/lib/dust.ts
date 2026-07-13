@@ -502,7 +502,10 @@ async function alchemyPrices(
       }[];
     };
     for (const row of body.data ?? []) {
-      const usd = row.prices?.find((p) => p.currency?.toLowerCase() === "usd");
+      // The scanner's JSX-text heuristic reads from this arrow into the `if`
+      // below and sees the Alchemy wire field `network` — server code, not
+      // user copy, hence the marker.
+      const usd = row.prices?.find((p) => p.currency?.toLowerCase() === "usd"); // copy-canon-allow
       const value = usd?.value ? Number(usd.value) : NaN;
       if (row.network && row.address && Number.isFinite(value)) {
         map.set(`${row.network}:${row.address.toLowerCase()}`, value);

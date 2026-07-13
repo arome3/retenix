@@ -6,7 +6,9 @@ import {
   GuardianAvatar,
 } from "@/components/avatars";
 import { BuyingPowerHeader } from "@/components/BuyingPowerHeader";
+import { SweepPromptCard } from "@/components/SweepPromptCard";
 import { Button } from "@/components/ui/button";
+import { requireSession } from "@/server/require-session";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -14,7 +16,10 @@ export const metadata: Metadata = { title: "Home" };
 // portfolio chart (C11) + holdings (C10). Modules 06/12/13 own those pieces;
 // this shell fixes the composition and the empty states so the screen is a
 // designed surface before they land — never a blank page.
-export default function HomePage() {
+export default async function HomePage() {
+  // The layout already gates; this read hands the client flow its EOA (the
+  // sweep runner signs with the session's own key — no client-side guessing).
+  const session = await requireSession();
   return (
     <div className="space-y-8 py-6">
       <header className="flex items-start justify-between gap-4">
@@ -31,7 +36,7 @@ export default function HomePage() {
         </Button>
       </header>
 
-      {/* TODO(doc 06): SweepPromptCard — first session, dust ≥ $1. */}
+      <SweepPromptCard eoa={session.eoa} />
 
       <section aria-labelledby="portfolio-heading" className="space-y-3">
         <h2 id="portfolio-heading" className="font-display text-h1">
