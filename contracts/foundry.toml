@@ -3,5 +3,7 @@ src = "src"
 out = "out"
 libs = ["lib"]
 solc = "0.8.26"
+# cross-impl fixture vectors (doc 07): generated from packages/registry, read by CrossImpl.t.sol
+fs_permissions = [{ access = "read", path = "./test/fixtures" }]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
