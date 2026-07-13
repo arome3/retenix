@@ -2,3 +2,5 @@ export * from "./usd6";
 export * from "./signing";
 export * from "./compliance";
 export * from "./sweep";
+export * from "./policy-digest";
+export * from "./contracts";

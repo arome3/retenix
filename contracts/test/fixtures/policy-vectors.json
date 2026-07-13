@@ -1,0 +1,62 @@
+{
+  "domain": {
+    "chainId": 421614,
+    "contract": "0x1000000000000000000000000000000000000007"
+  },
+  "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "assetIdHashes": {
+    "spyx": "0x8e59fc8af866990bc8405a91bb6790ab9d4222a1941bc9c184c82e30ceca5321",
+    "tslax": "0x3b0d18d2127701c5e7c5dc8bd4af94836440f7d9be0b84584488733850227469",
+    "sol": "0x62a22ed7f43907e9065ebbd4094e4ffa89985583e52d491251619a4c5b0be979",
+    "memecoin": "0xc1df60ecc4deb0d51eb7de4374ee1549a777fa5c32b5b5ea050d0da91c027c1f"
+  },
+  "listHashes": {
+    "demo": "0xe589f8fb045af2321702ada2fdf43c9696e89893bcdd34739e450f8b90429f91",
+    "demoSortedJoin": "sol|spyx|tslax",
+    "demoShuffledInput": "0xe589f8fb045af2321702ada2fdf43c9696e89893bcdd34739e450f8b90429f91",
+    "single": "0x8e59fc8af866990bc8405a91bb6790ab9d4222a1941bc9c184c82e30ceca5321",
+    "empty": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "ab": "0x67fad3bfa1e0321bd021ca805ce14876e50acac8ca8532eda8cbf924da565160",
+    "a_b": "0x5a88ea6b3512aff76efab0805c803d50fac547ccd1e3338a72737798b59ec0c7"
+  },
+  "createPlan": {
+    "agent": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "capPerExec": "50000000",
+    "capPerPeriod": "50000000",
+    "periodSecs": 604800,
+    "assetListHash": "0xe589f8fb045af2321702ada2fdf43c9696e89893bcdd34739e450f8b90429f91",
+    "assetIdsSorted": [
+      "sol",
+      "spyx",
+      "tslax"
+    ],
+    "nonce": 0,
+    "digest": "0x76edf45f7f3b657b326d34a6f783f4c052285c2e6cefb967686d78775e175bf8",
+    "sig": "0x95be3719ade127dc5592e17c20ade012560728f60f488989e6788c18838e752c774ee33e1852e01372b9b38012dcd05cd353156cceffcfe8a7221ed910e87a931c"
+  },
+  "revokePlan": {
+    "id": 0,
+    "nonce": 1,
+    "digest": "0x07eb1407babda34bcb69e5db406c5a3616af748be3094eab19b4fc293303ca70",
+    "sig": "0x53164aae34dd67b37f209998f14d18392d4695de5310a0de9b4ce0d6ba402d866ebbaf5f85d941ae07436099deaac812a3b1a46e3f095989c87b539e747899171c"
+  },
+  "revokeAll": {
+    "nonce": 2,
+    "digest": "0x4b8fef2b7e861b5929acef0f6c46ca7b2fad8603c910da1480077edc011ece14",
+    "sig": "0x3b19cb782f1472b93230f44406a0baebd82da9a2e13343b8f04eb0dd076cdab902a16e50ccc4b397d918720b02ddd4748389097ec342529739706e16641bf6701b"
+  },
+  "enrollEstate": {
+    "beneficiaryHash": "0x463265d4edcfb1bf3d9e4f697ceaa31e2cf00dfc22f7a0f68023eea863bb06d0",
+    "inactivitySecs": 120,
+    "nonce": 3,
+    "digest": "0xed208735a19fc8244242463d4196ce050f0fd4fd8203dc80e09a91f18ed341df",
+    "sig": "0x8bd18fbef4adf18805c9c9447adc65b53d6615160ccb97ce5f5fff9f0361eda63580a016ae7b221a5558059a52fcda6308a0e582cd019ce90684d4372a2f23911b"
+  },
+  "usd6": {
+    "usd15": "15000000",
+    "usd45": "45000000",
+    "usd50": "50000000",
+    "usd500": "500000000",
+    "cents1": "10000"
+  }
+}
