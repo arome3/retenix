@@ -16,6 +16,7 @@ import type {
   IBuyTransaction,
   ISellTransaction,
   IConvertTransaction,
+  ITradeConfig,
   ITransferTransaction,
   ITransaction,
   ISmartAccountOptions,
@@ -40,11 +41,19 @@ export function createBuyTransaction(
   return ua.createBuyTransaction(payload);
 }
 
+/**
+ * `tradeConfig` (added for doc 06): a sell's destination is router-chosen among
+ * the enabled primary tokens unless constrained. The sweep passes
+ * `{ usePrimaryTokens: [SUPPORTED_TOKEN_TYPE.USDC] }` because "sells route only
+ * to USDC in the user's own UA" is a doc 06 hard constraint. Omitted, the SDK
+ * default (all five primaries) applies — existing callers are unaffected.
+ */
 export function createSellTransaction(
   ua: UniversalAccount,
   payload: ISellTransaction,
+  tradeConfig?: ITradeConfig,
 ): Promise<ITransaction> {
-  return ua.createSellTransaction(payload);
+  return ua.createSellTransaction(payload, tradeConfig);
 }
 
 export function createConvertTransaction(
