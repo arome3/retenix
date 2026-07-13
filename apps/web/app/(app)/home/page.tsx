@@ -7,7 +7,6 @@ import {
 } from "@/components/avatars";
 import { BuyingPowerHeader } from "@/components/BuyingPowerHeader";
 import { Button } from "@/components/ui/button";
-import { devAffordances } from "@/env";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -19,7 +18,7 @@ export default function HomePage() {
   return (
     <div className="space-y-8 py-6">
       <header className="flex items-start justify-between gap-4">
-        <BuyingPowerHeader devPreview={devAffordances} />
+        <BuyingPowerHeader />
         {/* TODO(doc 13): C7 arms this — the hold-to-liquidate surface. */}
         <Button
           type="button"

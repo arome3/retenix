@@ -1,30 +1,29 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { BreakdownSheet } from "@/components/BreakdownSheet";
 import { HeroMoney } from "@/components/HeroMoney";
 import { BalanceSkeleton } from "@/components/skeletons";
 import { SourcePill } from "@/components/SourcePill";
 import { Button } from "@/components/ui/button";
 import { useCountUp } from "@/hooks/use-count-up";
 import { trpc } from "@/lib/trpc";
+import type { AccountSummary } from "@/server/lib/summary";
 
 /*
- * C1 BuyingPowerHeader — shell (DS §7 anatomy; doc 06 owns the data).
+ * C1 BuyingPowerHeader (DS §7, doc 06) — the money moment. States: skeleton /
+ * loaded (count-up 400ms, once per session) / stale (amber dot + "as of Nm
+ * ago", wired off asOf > 120s). Tapping the amount or the pill opens the
+ * breakdown sheet — provenance, never choice. The amount announces politely
+ * (aria-live inside HeroMoney), never assertively.
  *
- * account.summary still throws NOT_IMPLEMENTED, so today the query always
- * lands in the error branch: dev builds show preview numbers (devAffordances
- * is false in every production build, so an invented balance can never reach
- * a user), production shows the honest unavailable state. The skeleton /
- * loaded / stale rendering is real — doc 06 keeps it and swaps the data in.
+ * Failure honesty: account.summary serves last-known-with-old-asOf when the
+ * balance source is down (the stale dot renders), and errors only when there
+ * is no truth to show — that branch renders the unavailable state + retry,
+ * never a spinner over money, never an invented number.
  */
 
-// The pill needs only the network count; doc 06's response is
-// { totalUsd, sources[], asOf }. TODO(doc 06): use the router's inferred type.
-type Summary = { totalUsd: number; sourceCount: number; asOf: number | null };
-
-const PREVIEW: Summary = { totalUsd: 4812.07, sourceCount: 4, asOf: null };
-
-/** C1 renders the stale dot once the quote is older than this (doc 06). */
+/** C1 renders the stale dot once the summary is older than this (doc 06). */
 const STALE_AFTER_MS = 120_000;
 
 // Render must not read the wall clock (react-hooks/purity), so the clock is
@@ -40,31 +39,38 @@ const subscribeClock = (onChange: () => void) => {
 const readClockMinute = () => Math.floor(Date.now() / MINUTE_MS);
 const readClockMinuteServer = () => 0;
 
-function LoadedHero({
-  summary,
-  preview,
-}: {
-  summary: Summary;
-  preview?: boolean;
-}) {
-  const display = useCountUp(summary.totalUsd, { sessionKey: "buying-power" });
+function LoadedHero({ summary }: { summary: AccountSummary }) {
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const display = useCountUp(summary.buyingPowerUsd, {
+    sessionKey: "buying-power",
+  });
   const nowMinute = useSyncExternalStore(
     subscribeClock,
     readClockMinute,
     readClockMinuteServer,
   );
-  const ageMs =
-    summary.asOf === null
-      ? 0
-      : Math.max(0, nowMinute * MINUTE_MS - summary.asOf);
+  const asOfMs = Date.parse(summary.asOf);
+  const ageMs = Number.isNaN(asOfMs)
+    ? 0
+    : Math.max(0, nowMinute * MINUTE_MS - asOfMs);
   const stale = ageMs > STALE_AFTER_MS;
 
   return (
     <div className="flex flex-col gap-2">
       <p className="text-caption text-muted-foreground">Buying power</p>
-      <HeroMoney value={display} live />
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        className="w-fit rounded-lg text-left"
+        onClick={() => setBreakdownOpen(true)}
+      >
+        <HeroMoney value={display} live />
+      </button>
       <div className="flex flex-wrap items-center gap-2">
-        <SourcePill count={summary.sourceCount} />
+        <SourcePill
+          count={summary.sources.length}
+          onClick={() => setBreakdownOpen(true)}
+        />
         {stale && (
           <span className="flex items-center gap-1.5 text-caption text-muted-foreground">
             <span
@@ -76,16 +82,16 @@ function LoadedHero({
           </span>
         )}
       </div>
-      {preview && (
-        <p className="text-caption text-muted-foreground">
-          Preview numbers — module 06 wires real balances.
-        </p>
-      )}
+      <BreakdownSheet
+        open={breakdownOpen}
+        onOpenChange={setBreakdownOpen}
+        summary={summary}
+      />
     </div>
   );
 }
 
-export function BuyingPowerHeader({ devPreview }: { devPreview: boolean }) {
+export function BuyingPowerHeader() {
   const summary = trpc.account.summary.useQuery(undefined, {
     retry: false,
     staleTime: 30_000,
@@ -94,7 +100,6 @@ export function BuyingPowerHeader({ devPreview }: { devPreview: boolean }) {
   if (summary.isPending) return <BalanceSkeleton />;
 
   if (summary.error) {
-    if (devPreview) return <LoadedHero summary={PREVIEW} preview />;
     return (
       <div className="flex flex-col gap-3">
         <p className="text-caption text-muted-foreground">Buying power</p>
@@ -115,20 +120,5 @@ export function BuyingPowerHeader({ devPreview }: { devPreview: boolean }) {
     );
   }
 
-  // Live data (module 06 onward). The route throws today, so its output type
-  // is `never` — this cast disappears with doc 06's real return type.
-  const data = summary.data as unknown as {
-    totalUsd: number;
-    sources: unknown[];
-    asOf: string;
-  };
-  return (
-    <LoadedHero
-      summary={{
-        totalUsd: data.totalUsd,
-        sourceCount: data.sources.length,
-        asOf: new Date(data.asOf).getTime(),
-      }}
-    />
-  );
+  return <LoadedHero summary={summary.data} />;
 }
