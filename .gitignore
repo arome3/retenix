@@ -39,3 +39,7 @@ test-results/
 /retenix-product-spec.md
 /retenix-technical-spec.md
 /uxmaxx-hackathon-strategy.md
+
+# foundry broadcast logs from local dry-runs (anvil chain 31337) — real-network
+# broadcasts (421614/42161) stay committable as deploy records
+contracts/broadcast/*/31337/
