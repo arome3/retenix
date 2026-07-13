@@ -24,6 +24,13 @@ const webTestEnv = {
   SENTRY_AUTH_TOKEN: "sntrys_test",
   INTERNAL_API_TOKEN: "internal-test-token",
   DEMO_MODE: "1",
+  // doc 06: the web server env now requires the six scanner endpoints.
+  RPC_URL_ETHEREUM: "https://eth-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_BASE: "https://base-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_ARBITRUM: "https://arb-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_BSC: "https://bnb-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_XLAYER: "https://rpc.xlayer.tech",
+  RPC_URL_SOLANA: "https://solana-mainnet.g.alchemy.com/v2/test",
 };
 
 export default defineConfig({

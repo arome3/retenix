@@ -15,6 +15,12 @@ const VALID: Record<string, string> = {
   SENTRY_AUTH_TOKEN: "sntrys_test",
   INTERNAL_API_TOKEN: "internal-test-token",
   DEMO_MODE: "0",
+  RPC_URL_ETHEREUM: "https://eth-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_BASE: "https://base-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_ARBITRUM: "https://arb-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_BSC: "https://bnb-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_XLAYER: "https://rpc.xlayer.tech",
+  RPC_URL_SOLANA: "https://solana-mainnet.g.alchemy.com/v2/test",
 };
 
 async function importEnv(overrides: Record<string, string | undefined>) {
@@ -48,5 +54,17 @@ describe("web env module", () => {
     await expect(
       importEnv({ NEXT_PUBLIC_PARTICLE_PROJECT_ID: undefined }),
     ).rejects.toThrow(/NEXT_PUBLIC_PARTICLE_PROJECT_ID/);
+  });
+
+  it("requires the six scanner endpoints (doc 06) and names a missing one", async () => {
+    await expect(importEnv({ RPC_URL_SOLANA: undefined })).rejects.toThrow(
+      /RPC_URL_SOLANA/,
+    );
+  });
+
+  it("rejects a malformed scanner endpoint (must be a URL)", async () => {
+    await expect(importEnv({ RPC_URL_XLAYER: "not-a-url" })).rejects.toThrow(
+      /RPC_URL_XLAYER/,
+    );
   });
 });

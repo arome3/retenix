@@ -15,6 +15,16 @@ const serverSchema = z.object({
   INTERNAL_API_TOKEN: z.string().min(1),
   // "1" enables demo-only affordances (rogue-instruction trigger, demo-scaled defaults).
   DEMO_MODE: z.enum(["0", "1"]).default("0"),
+  // PROPOSED (doc 06, spec-silent): doc 00 lists these six under the WORKER's
+  // table; the web server also needs them for the dust scanner (sweep.preview /
+  // sweep.execute re-scan). Same canonical names, never NEXT_PUBLIC_ — the
+  // browser must never read RPC endpoints.
+  RPC_URL_ETHEREUM: z.url(),
+  RPC_URL_BASE: z.url(),
+  RPC_URL_ARBITRUM: z.url(),
+  RPC_URL_BSC: z.url(),
+  RPC_URL_XLAYER: z.url(),
+  RPC_URL_SOLANA: z.url(),
 });
 
 const clientSchema = z.object({
