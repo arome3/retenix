@@ -22,7 +22,8 @@ export const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 /** Deployed RetenixPolicy addresses per chain. Zero address = not deployed yet. */
 export const POLICY_ADDRESSES = {
   [ARBITRUM_ONE_CHAIN_ID]: "0x0000000000000000000000000000000000000000",
-  [ARBITRUM_SEPOLIA_CHAIN_ID]: "0x0000000000000000000000000000000000000000",
+  // deployed + verified 2026-07-13 (docs/deployments.md)
+  [ARBITRUM_SEPOLIA_CHAIN_ID]: "0x4549a91b4727537372925C8C589d9BCfF9B6c261",
 } as const satisfies Record<number, `0x${string}`>;
 
 /** The production (Arbitrum One) address — mirrors the canonical env name. */
