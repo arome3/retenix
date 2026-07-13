@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "seed:dust": "tsx scripts/seed-dust.ts"
   },
   "dependencies": {
     "@particle-network/universal-account-sdk": "2.0.3",
