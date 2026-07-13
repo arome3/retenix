@@ -21,8 +21,9 @@ export const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 
 /** Deployed RetenixPolicy addresses per chain. Zero address = not deployed yet. */
 export const POLICY_ADDRESSES = {
-  [ARBITRUM_ONE_CHAIN_ID]: "0x0000000000000000000000000000000000000000",
-  // deployed + verified 2026-07-13 (docs/deployments.md)
+  // both deployed + verified 2026-07-13 (docs/deployments.md). One carries a
+  // DEV agent EOA — module 08 redeploys if the KMS agent address differs.
+  [ARBITRUM_ONE_CHAIN_ID]: "0x606cDadeeb7FF1e3d86C92e34b2e24dC9E9C6024",
   [ARBITRUM_SEPOLIA_CHAIN_ID]: "0x4549a91b4727537372925C8C589d9BCfF9B6c261",
 } as const satisfies Record<number, `0x${string}`>;
 
