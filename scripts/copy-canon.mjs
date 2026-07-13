@@ -4,7 +4,8 @@
 //   pnpm copy-canon
 //
 // Scans user-facing copy in apps/web — string literals and JSX text, not code
-// identifiers (chainId, networkFee are code; "across 5 chains" is copy).
+// identifiers (chainId, networkFee are code; "across 5 chains" is copy) and not
+// comments (dev-facing prose that never reaches a user — masked before scan).
 //
 // Banned (G12): gas · bridge · chain · network (as a choice) · seed phrase ·
 // wallet / wallet address · slippage · sign transaction · smart contract ·
@@ -85,6 +86,63 @@ function looksLikeCode(text) {
   return !/\s/.test(text.trim()) && /[/@_.:-]/.test(text);
 }
 
+/**
+ * Blank out `//` and block comments so the copy heuristics never read
+ * developer prose as JSX text (a stray `}` in an import and a `{` in a comment
+ * would otherwise bracket a comment as one "segment"). Comment bodies become
+ * spaces — byte offsets and newlines are preserved, so line numbers still line
+ * up with the original source. String / template literals are copied verbatim:
+ * they're exactly what we DO want to scan, and a `//` or `/*` inside one must
+ * not be mistaken for a comment.
+ */
+function maskComments(src) {
+  let out = "";
+  const n = src.length;
+  for (let i = 0; i < n; ) {
+    const c = src[i];
+    const c2 = src[i + 1];
+    if (c === '"' || c === "'" || c === "`") {
+      out += c;
+      i++;
+      while (i < n) {
+        const d = src[i];
+        out += d;
+        i++;
+        if (d === "\\") {
+          if (i < n) out += src[i++];
+          continue;
+        }
+        if (d === c) break;
+        if (c !== "`" && d === "\n") break; // unterminated ' or " — bail
+      }
+      continue;
+    }
+    if (c === "/" && c2 === "/") {
+      while (i < n && src[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    if (c === "/" && c2 === "*") {
+      out += "  ";
+      i += 2;
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        out += src[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < n) {
+        out += "  ";
+        i += 2; // consume the closing */
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 const violations = [];
 
 for (const dir of SCAN_DIRS) {
@@ -105,8 +163,11 @@ for (const dir of SCAN_DIRS) {
       return lo; // 0-based
     };
     const lines = source.split("\n");
+    // Mask comments so their prose can't be read as user copy; offsets and
+    // line numbers are preserved, so `lineOf` / `lines` still index correctly.
+    const scannable = maskComments(source);
 
-    for (const seg of segments(source)) {
+    for (const seg of segments(scannable)) {
       if (looksLikeCode(seg.text)) continue;
       const line = lineOf(seg.index);
       if (lines[line]?.includes(ALLOW_MARKER)) continue;
