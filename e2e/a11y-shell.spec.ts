@@ -49,13 +49,25 @@ test("keyboard walk: tab order Home→Activity→Agents→Profile", async ({
   await page.goto("/home");
   await page.waitForLoadState("networkidle");
 
-  // first Tab lands on the skip link, then the four tabs in order
+  // first Tab lands on the skip link
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toHaveText("Skip to content");
-  for (const label of ["Home", "Activity", "Agents", "Profile"]) {
+
+  // Header money affordances (doc 06: the hero amount — and, when funded, the
+  // source pill — open the breakdown sheet) sit in source order before the tab
+  // bar. Walk through them, then require the four tabs in strict order.
+  const labels = ["Home", "Activity", "Agents", "Profile"];
+  let next = 0;
+  for (let i = 0; i < 8 && next < labels.length; i++) {
     await page.keyboard.press("Tab");
-    await expect(page.locator(":focus")).toHaveText(label);
+    const text = (await page.locator(":focus").textContent())?.trim() ?? "";
+    if (text === labels[next]) {
+      next++;
+    } else if (next > 0) {
+      throw new Error(`tab order broke after ${labels[next - 1]}: got "${text}"`);
+    }
   }
+  expect(next).toBe(labels.length);
 
   // the current tab exposes aria-current="page"
   await expect(
