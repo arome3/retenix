@@ -158,3 +158,44 @@ export const sweepExecutePayloadSchema = z.discriminatedUnion("phase", [
   sweepReportPayloadSchema,
 ]);
 export type SweepExecutePayload = z.infer<typeof sweepExecutePayloadSchema>;
+
+// ---------------------------------------------------------------------------
+// The aggregate receipt (events type sweep.receipt, payload_json shape).
+// EXACTLY ONE row per execution (PS-F2-AC2); per-leg detail lives inside it —
+// separate leg rows would leak into module 11's feed as extra receipts.
+// ---------------------------------------------------------------------------
+
+export type SweepLegOutcome = "finished" | "refunded" | "failed" | "unverified";
+
+export interface SweepReceiptLeg {
+  chainId: number;
+  /** Display name — receipts may name networks (doc 01 exceptions). */
+  network: string;
+  token: string;
+  symbol: string;
+  /** From the AUTHORIZED item, never the client's claim. */
+  usd: number;
+  transactionId?: string;
+  outcome: SweepLegOutcome;
+  /** false = the server could not confirm this leg against Particle. */
+  serverVerified: boolean;
+  fees: FeeTotals;
+  feeSource: "settled" | "quoted" | "none";
+  activityUrl?: string;
+  error?: string;
+}
+
+export interface SweepReceipt {
+  executionId: string;
+  /** sweepReceiptHeadline(succeededUsd, networkCount), stored verbatim. */
+  headline: string;
+  succeededUsd: number;
+  networkCount: number;
+  authorizedTotalUsd: number;
+  /** Aggregate fees across the legs that succeeded. */
+  fees: FeeTotals;
+  legs: SweepReceiptLeg[];
+  /** Reported legs the server refused to count (forensics, continue-and-report). */
+  ignored: { chainId: number; token: string; reason: "unauthorized" | "duplicate" }[];
+  createdAt: string;
+}

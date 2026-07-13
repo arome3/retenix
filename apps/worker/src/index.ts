@@ -45,7 +45,17 @@ async function warmRegistryAtBoot(): Promise<void> {
 // Boot: cron + pg-boss workers. Module 08 fills in the handlers.
 async function main() {
   const boss = new PgBoss(env.DATABASE_URL);
-  boss.on("error", (err: Error) => console.error("[worker] pg-boss error", err));
+  // Pre-existing toolchain quirk (surfaced 2026-07-13, unrelated to any module
+  // code): under `tsc -b` composite builds, pg-boss v12's generic
+  // `extends EventEmitter<PgBossEventMap>` base collapses (skipLibCheck hides
+  // the root diagnostic inside its d.ts) and the INSTANCE loses the inherited
+  // members — plain `tsc -p apps/worker` typechecks the same line fine. The
+  // intersection below restores the EventEmitter instance surface without
+  // changing runtime behavior. Only inherited members are affected; pg-boss's
+  // own methods (work/send/schedule/…) are untouched for module 08.
+  (boss as PgBoss & NodeJS.EventEmitter).on("error", (err: Error) =>
+    console.error("[worker] pg-boss error", err),
+  );
   await boss.start();
 
   // Per-minute due-plan scan cadence (module 08 implements the handler).

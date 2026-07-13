@@ -45,11 +45,11 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 // protectedProcedure. account.bootstrap is the deliberate exception: it runs
 // pre-gate (lib/post-login.ts), so it stays protectedProcedure.
 // ---------------------------------------------------------------------------
-export const gatedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const [row] = await ctx.db
+async function assertGatePassed(db: Db, userId: string): Promise<string> {
+  const [row] = await db
     .select({ region: users.region })
     .from(users)
-    .where(eq(users.id, ctx.session.userId))
+    .where(eq(users.id, userId))
     .limit(1);
   if (!row || !row.region) {
     throw new TRPCError({
@@ -57,8 +57,13 @@ export const gatedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
       message: "eligibility gate not completed",
     });
   }
+  return row.region;
+}
+
+export const gatedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const region = await assertGatePassed(ctx.db, ctx.session.userId);
   return next({
-    ctx: { ...ctx, session: { ...ctx.session, region: row.region } },
+    ctx: { ...ctx, session: { ...ctx.session, region } },
   });
 });
 
@@ -76,52 +81,78 @@ const envelopeSchema = z.object({
   sig: sigEnvelopeSchema,
 });
 
+async function verifySignedEnvelope(
+  db: Db,
+  session: { userId: string; eoaAddr: string },
+  path: string,
+  rawInput: unknown,
+): Promise<void> {
+  const parsed = envelopeSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "signed envelope { payload, sig } required",
+    });
+  }
+  const { payload, sig } = parsed.data;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (sig.expiry <= now) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "signature expired" });
+  }
+  if (sig.expiry > now + SIG_MAX_TTL_SECS) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "expiry exceeds the 5-minute window",
+    });
+  }
+
+  const message = buildSignedMessage({
+    route: path,
+    inputHash: computeInputHash(payload),
+    nonce: sig.nonce,
+    expiry: sig.expiry,
+  });
+
+  let signer: string;
+  try {
+    signer = verifyMessage(message, sig.signature);
+  } catch {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "invalid signature" });
+  }
+  if (signer.toLowerCase() !== session.eoaAddr.toLowerCase()) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "signer is not the session EOA",
+    });
+  }
+
+  await consumeNonce(db, session.userId, sig.nonce);
+}
+
 export const signedProcedure = protectedProcedure.use(
   async ({ ctx, path, getRawInput, next }) => {
-    const parsed = envelopeSchema.safeParse(await getRawInput());
-    if (!parsed.success) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "signed envelope { payload, sig } required",
-      });
-    }
-    const { payload, sig } = parsed.data;
-
-    const now = Math.floor(Date.now() / 1000);
-    if (sig.expiry <= now) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "signature expired" });
-    }
-    if (sig.expiry > now + SIG_MAX_TTL_SECS) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "expiry exceeds the 5-minute window",
-      });
-    }
-
-    const message = buildSignedMessage({
-      route: path,
-      inputHash: computeInputHash(payload),
-      nonce: sig.nonce,
-      expiry: sig.expiry,
-    });
-
-    let signer: string;
-    try {
-      signer = verifyMessage(message, sig.signature);
-    } catch {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "invalid signature" });
-    }
-    if (signer.toLowerCase() !== ctx.session.eoaAddr.toLowerCase()) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "signer is not the session EOA",
-      });
-    }
-
-    await consumeNonce(ctx.db, ctx.session.userId, sig.nonce);
+    await verifySignedEnvelope(ctx.db, ctx.session, path, await getRawInput());
     return next();
   },
 );
+
+// ---------------------------------------------------------------------------
+// gatedSignedProcedure — gate AND signature, for signed asset routes
+// (doc 06's sweep.execute; docs 13/15 likely follow). Gate runs FIRST so a
+// FORBIDDEN gate failure never consumes a nonce.
+// ---------------------------------------------------------------------------
+export const gatedSignedProcedure = protectedProcedure
+  .use(async ({ ctx, next }) => {
+    const region = await assertGatePassed(ctx.db, ctx.session.userId);
+    return next({
+      ctx: { ...ctx, session: { ...ctx.session, region } },
+    });
+  })
+  .use(async ({ ctx, path, getRawInput, next }) => {
+    await verifySignedEnvelope(ctx.db, ctx.session, path, await getRawInput());
+    return next();
+  });
 
 // Single-use enforcement: lock the user row to serialize concurrent attempts,
 // then require the nonce to be strictly greater than the last one seen.
