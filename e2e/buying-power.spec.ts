@@ -181,6 +181,40 @@ test("breakdown sheet is keyboard-navigable and axe-clean", async ({ page }) => 
   await expect(sheet).toBeHidden();
 });
 
+test("PS-F2-AC1 (live source): the real balance pipeline renders < 5s warm", async ({
+  page,
+  context,
+}) => {
+  // No mocks: session → gatedProcedure → getPrimaryAssets against Particle.
+  // A fresh test EOA correctly reads $0.00; the measurement is the pipeline.
+  await page.unroute("**/api/trpc/**"); // drop the beforeEach mock — live route
+  const liveUser = await createTestUser("DE");
+  try {
+    await signIn(context, liveUser, "DE");
+    await page.goto("/home"); // warm the compile + session path
+    await page.waitForLoadState("networkidle");
+
+    const started = Date.now();
+    await page.goto("/home");
+    const hero = page.locator(".text-display-xl").filter({ hasText: "$" });
+    const unavailable = page.getByText("We can’t show your balance right now");
+    await expect(hero.or(unavailable).first()).toBeVisible();
+    const elapsed = Date.now() - started;
+
+    if (await unavailable.isVisible().catch(() => false)) {
+      test.skip(
+        true,
+        "balance source unavailable — real Particle credentials required (owner-run, doc 16)",
+      );
+      return;
+    }
+    console.log(`[AC1 live] login → hero rendered in ${elapsed}ms (budget 5000ms)`);
+    expect(elapsed).toBeLessThan(5_000);
+  } finally {
+    await deleteTestUser(liveUser);
+  }
+});
+
 test("reduced motion renders the final value instantly (WCAG 2.3.3 / C39)", async ({
   page,
 }) => {
