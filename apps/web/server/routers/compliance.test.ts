@@ -1,9 +1,20 @@
 import { events, getDb, users } from "@retenix/db";
 import { COMPLIANCE_EVENTS, COMPLIANCE_QUIZ } from "@retenix/shared";
 import { and, eq } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GATE_COOKIE } from "@/lib/session";
 import type { Context } from "../context";
+
+// The gated probe route (account.summary) reads Particle through @retenix/ua
+// as of module 06 — stub the network edge so this stays a pure gate test.
+vi.mock("@retenix/ua", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@retenix/ua")>();
+  return {
+    ...actual,
+    createUa: vi.fn(() => ({}) as never),
+    getPrimaryAssets: vi.fn().mockResolvedValue({ totalAmountInUSD: 0, assets: [] }),
+  };
+});
 
 const { appRouter } = await import("./index");
 const db = getDb();
@@ -246,9 +257,11 @@ describe("gatedProcedure (deep-link layer 2) — account.summary", () => {
 
     await passGate(user, "DE");
 
-    // Post-gate: the layer lets it through to the (module-06) stub.
-    await expect(caller(user).account.summary()).rejects.toMatchObject({
-      code: "NOT_IMPLEMENTED",
+    // Post-gate: the layer lets the (module-06) implementation answer — an
+    // empty account summarizes to zero, it is not an error.
+    await expect(caller(user).account.summary()).resolves.toMatchObject({
+      buyingPowerUsd: 0,
+      sources: [],
     });
   });
 });

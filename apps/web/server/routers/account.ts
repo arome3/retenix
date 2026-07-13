@@ -1,19 +1,45 @@
 import { users } from "@retenix/db";
+import { getPrimaryAssets } from "@retenix/ua";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { serverUa } from "../lib/ua";
+import { summarize, summaryCache, type AccountSummary } from "../lib/summary";
 import { gatedProcedure, protectedProcedure, router } from "../trpc";
 
 // A base58 Solana address: 32 bytes → 32–44 base58 chars (alphabet excludes 0 O I l).
 const SOLANA_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export const accountRouter = router({
-  // Buying power + breakdown (module 06). An asset-data route, so it sits behind
-  // the eligibility gate (doc 04, layer 2): a region-less session gets FORBIDDEN,
-  // not data. Docs 05+ likewise use gatedProcedure for asset routes — NOT plain
-  // protectedProcedure, and NOT bootstrap (which must run pre-gate, below).
-  summary: gatedProcedure.query(() => {
-    throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "account.summary — module 06" });
+  // Buying power + breakdown (doc 06, tech spec §13). An asset-data route, so it
+  // sits behind the eligibility gate (doc 04, layer 2): a region-less session gets
+  // FORBIDDEN, not data. Docs 05+ likewise use gatedProcedure for asset routes —
+  // NOT plain protectedProcedure, and NOT bootstrap (which must run pre-gate, below).
+  //
+  // One number across the six networks: getPrimaryAssets → summarize (pure fold),
+  // behind the PROPOSED 30s per-user cache. Failure honesty: if Particle is
+  // unreachable, the last-known summary is served with its OLD asOf (C1 renders
+  // the stale marker off it) — a number is never fabricated, and with no
+  // last-known there is no number at all (C1's unavailable state + retry).
+  summary: gatedProcedure.query(async ({ ctx }): Promise<AccountSummary> => {
+    const { userId, eoaAddr } = ctx.session;
+
+    const fresh = summaryCache.fresh(userId);
+    if (fresh) return fresh;
+
+    try {
+      const resp = await getPrimaryAssets(serverUa(eoaAddr));
+      const summary = summarize(resp, new Date());
+      summaryCache.set(userId, summary);
+      return summary;
+    } catch {
+      const stale = summaryCache.stale(userId);
+      if (stale) return stale;
+      throw new TRPCError({
+        code: "BAD_GATEWAY",
+        message: "balance source unavailable",
+      });
+    }
   }),
 
   // PROPOSED (spec-silent) — doc 03 task 7: first-login persistence of the UA
