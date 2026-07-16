@@ -185,8 +185,7 @@ export class PolicyClient {
     fn: "recordExecution" | "refundExecution",
     args: unknown[],
   ): Promise<TxIntent> {
-    return this.txQueue.add(
-      async (): Promise<TxIntent> => {
+    return this.txQueue.add(async (): Promise<TxIntent> => {
         const from = await this.agentAddress();
         const data = policyInterface.encodeFunctionData(fn, args);
         const [nonce, fee, network, gas] = await Promise.all([
@@ -206,9 +205,7 @@ export class PolicyClient {
           maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0n,
         });
         return { kind, nonce, txHash: keccak256(raw), raw, chainId: Number(network.chainId) };
-      },
-      { throwOnTimeout: true },
-    );
+    });
   }
 
   /** Broadcast a persisted intent and wait one confirmation. */
