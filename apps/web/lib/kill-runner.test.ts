@@ -79,9 +79,9 @@ const PREP = {
   needsRevoke: true,
   digest: `0x${"cd".repeat(32)}`,
   nonce: "7",
-  activeKillId: null,
-  lastKillId: null,
-} as never;
+  activeKillId: null as string | null,
+  lastKillId: null as string | null,
+};
 
 function executeResponse(workItems: KillWorkItem[], polling: { legId: string; transactionId: string }[] = []) {
   return {
@@ -98,7 +98,7 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prepareMock.mockResolvedValue(PREP);
+  prepareMock.mockResolvedValue(PREP as never);
   pollMock.mockResolvedValue({ outcome: "finished", t: { status: 7 } } as never);
   reportMock.mockResolvedValue({ outcome: "settled" } as never);
 });
