@@ -1,12 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import {
+  blockedReceipt,
+  brokerHiredReceipt,
+  executedReceipt,
+  refundedReceipt,
+  sweepReceiptHeadline,
+  type FeedItem,
+} from "@retenix/shared";
 import { useMounted } from "@/hooks/use-mounted";
+import { useNowMinute } from "@/hooks/use-now-minute";
 import {
   BrokerAvatar,
   ContinuityAvatar,
   GuardianAvatar,
 } from "@/components/avatars";
+import { ReceiptRow } from "@/components/ReceiptRow";
 import { HeroMoney } from "@/components/HeroMoney";
 import { IosInstallTeach } from "@/components/IosInstallTeach";
 import { Num } from "@/components/Num";
@@ -380,7 +390,7 @@ export function TokenSheet() {
               <TabsTrigger value="blocked">Blocked</TabsTrigger>
             </TabsList>
             <TabsContent value="all" className="pt-2 text-small text-muted-foreground">
-              Feed filters land in module 11.
+              The live feed chips are on /activity (module 11).
             </TabsContent>
             <TabsContent value="trades" className="pt-2 text-small text-muted-foreground">
               Trades only.
@@ -435,6 +445,15 @@ export function TokenSheet() {
           </div>
         </Section>
 
+        <Section title="Receipts (C4)">
+          <p className="text-small text-muted-foreground">
+            All five presentations (doc 11): executed · blocked (proud amber
+            shield, never loss red) · failed-refunded · system · aggregate
+            legs. Expand any row for the forensics.
+          </p>
+          <DemoReceipts />
+        </Section>
+
         <Section title="The staff">
           <div className="flex items-center gap-6">
             {(
@@ -468,5 +487,116 @@ export function TokenSheet() {
         </footer>
       </div>
     </TooltipProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// C4 fixtures (module 11) — the five receipt presentations, from the CANONICAL
+// template builders (never hand-written sentences), expandable in place.
+// ---------------------------------------------------------------------------
+
+const DEMO_FEES = { gas: 0.03, service: 0.08, lp: 0.03, total: 0.14 };
+const DEMO_SWEEP_FEES = { gas: 0.01, service: 0.02, lp: 0, total: 0.03 };
+
+function demoReceiptItems(nowMs: number): FeedItem[] {
+  const at = (minsAgo: number) => new Date(nowMs - minsAgo * 60_000).toISOString();
+  return [
+    {
+      id: "demo-executed",
+      at: at(2),
+      variant: "executed",
+      agent: "broker",
+      sentence: executedReceipt({
+        usd: 15,
+        ticker: "SPYx",
+        sources: ["Base", "Arbitrum"],
+        fees: DEMO_FEES,
+      }),
+      detail: {
+        fees: DEMO_FEES,
+        sources: ["Base", "Arbitrum"],
+        uaTxId: "demo1234567890abcdef",
+        planId: "demo-plan",
+      },
+    },
+    {
+      id: "demo-blocked",
+      at: at(9),
+      variant: "blocked",
+      agent: "broker",
+      sentence: blockedReceipt("OverPeriodCap", "$50 weekly cap"),
+      detail: { planId: "demo-plan" },
+    },
+    {
+      id: "demo-refunded",
+      at: at(26),
+      variant: "failed-refunded",
+      agent: "broker",
+      sentence: refundedReceipt(15),
+      detail: { planId: "demo-plan" },
+    },
+    {
+      id: "demo-system",
+      at: at(65),
+      variant: "system",
+      agent: "broker",
+      sentence: brokerHiredReceipt({
+        amountUsd: 25,
+        cadence: "weekly",
+        tickers: ["SPYx", "TSLAx", "SOL"],
+      }),
+      detail: { planId: "demo-plan" },
+    },
+    {
+      id: "demo-sweep",
+      at: at(80),
+      variant: "system",
+      agent: null,
+      sentence: sweepReceiptHeadline(23.11, 5),
+      detail: {
+        fees: DEMO_SWEEP_FEES,
+        legs: [
+          {
+            network: "Base", // copy-canon-allow — receipt fixture names networks
+            symbol: "DEGEN",
+            usd: 0.61,
+            outcome: "finished",
+            fees: DEMO_SWEEP_FEES,
+            feeSource: "settled" as const,
+            uaTxId: "demo1234567890abcdef",
+          },
+          {
+            network: "BSC", // copy-canon-allow — receipt fixture names networks
+            symbol: "CAKE",
+            usd: 0.42,
+            outcome: "refunded",
+            feeSource: "none" as const,
+          },
+        ],
+      },
+    },
+  ];
+}
+
+function DemoReceipts() {
+  const nowMs = useNowMinute();
+  const [expandedId, setExpandedId] = useState<string | null>("demo-executed");
+  return (
+    <ul className="m-0 list-none p-0">
+      {demoReceiptItems(nowMs).map((item) => (
+        <li key={item.id}>
+          <ReceiptRow
+            item={item}
+            nowMs={nowMs}
+            expanded={expandedId === item.id}
+            onToggle={() =>
+              setExpandedId((c) => (c === item.id ? null : item.id))
+            }
+            policyQuote={item.detail?.planId ? "$25.00 every week" : undefined}
+            onOpenPolicy={item.detail?.planId ? () => {} : undefined}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
