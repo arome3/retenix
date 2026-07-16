@@ -56,11 +56,21 @@ export function createSellTransaction(
   return ua.createSellTransaction(payload, tradeConfig);
 }
 
+/**
+ * `tradeConfig` (added for doc 13, the createSellTransaction precedent):
+ * converts are OUTPUT-denominated (`expectToken`), so unconstrained the router
+ * funds "expect N USDC" from ANY primary — including USDC itself (pointless
+ * fee-paying churn) or a mix that collides with a sibling convert leg. The
+ * kill switch passes `{ usePrimaryTokens: [<that primary>] }` per leg so each
+ * convert drains exactly one primary. Omitted, the SDK default applies —
+ * existing callers are unaffected.
+ */
 export function createConvertTransaction(
   ua: UniversalAccount,
   payload: IConvertTransaction,
+  tradeConfig?: ITradeConfig,
 ): Promise<ITransaction> {
-  return ua.createConvertTransaction(payload);
+  return ua.createConvertTransaction(payload, tradeConfig);
 }
 
 export function createTransferTransaction(
