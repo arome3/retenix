@@ -115,6 +115,8 @@ function stubRelay(overrides: Partial<PlanRelay> = {}): PlanRelay & {
   const relay: PlanRelay = {
     domain: { chainId: 421614, contract: "0x00" },
     authNonce: async () => 0n,
+    agentAddress: async () => "0x562937835cdD5C92F54B94Df658Fd3b50A68ecD5",
+    buildCreatePlanDigest: async () => `0x${"cd".repeat(32)}`,
     createPlan: async () => {
       calls.create += 1;
       return { txHash: "0xtx", planId: 42n };

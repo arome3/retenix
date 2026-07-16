@@ -75,11 +75,26 @@ export interface RelayResult {
 export class RelayClient {
   readonly domain: RelayDomain;
   private readonly provider: JsonRpcProvider;
-  private readonly relayer: Wallet;
-  private readonly contract: Contract;
+  /** Read-only contract (provider-bound) — reads never need the signing key. */
+  private readonly reader: Contract;
+  /** Write contract, lazily created (needs the relayer key). */
+  private writer?: Contract;
 
   constructor() {
     this.domain = policyDomain();
+    // Reads (nonce, agent, digest building) work with only a provider, so a
+    // placeholder-cred boot can still PREPARE an activation; the key check is
+    // deferred to write time (module 08's degraded-boot convention).
+    this.provider = new JsonRpcProvider(rpcUrl(this.domain.chainId));
+    this.reader = new Contract(
+      this.domain.contract,
+      RETENIX_POLICY_ABI,
+      this.provider,
+    );
+  }
+
+  private writeContract(): Contract {
+    if (this.writer) return this.writer;
     const key = env.RELAYER_PRIVATE_KEY;
     if (!isHexString(key, 32)) {
       throw new Error(
@@ -87,18 +102,40 @@ export class RelayClient {
           "relayer key (owner-action, HANDOFF module 10)",
       );
     }
-    this.provider = new JsonRpcProvider(rpcUrl(this.domain.chainId));
-    this.relayer = new Wallet(key, this.provider);
-    this.contract = new Contract(
+    this.writer = new Contract(
       this.domain.contract,
       RETENIX_POLICY_ABI,
-      this.relayer,
+      new Wallet(key, this.provider),
     );
+    return this.writer;
   }
 
   /** authNonces(owner) — the next sequential nonce for a relayed owner op. */
   async authNonce(owner: string): Promise<bigint> {
-    return (await this.contract.authNonces(owner)) as bigint;
+    return (await this.reader.authNonces(owner)) as bigint;
+  }
+
+  /** The contract's immutable agent EOA (needed to build createPlan digests). */
+  async agentAddress(): Promise<string> {
+    return (await this.reader.agent()) as string;
+  }
+
+  /** Build the createPlan digest the owner must personal_sign (client preview). */
+  async buildCreatePlanDigest(args: {
+    capPerExec: bigint;
+    capPerPeriod: bigint;
+    periodSecs: number;
+    assetListHash: string;
+    nonce: bigint;
+  }): Promise<string> {
+    return createPlanDigest(this.domain, {
+      agent: await this.agentAddress(),
+      capPerExec: args.capPerExec,
+      capPerPeriod: args.capPerPeriod,
+      periodSecs: args.periodSecs,
+      assetListHash: args.assetListHash,
+      nonce: args.nonce,
+    });
   }
 
   /**
@@ -117,17 +154,10 @@ export class RelayClient {
     nonce: bigint;
     ownerSig: string;
   }): Promise<RelayResult & { planId: bigint }> {
-    const digest = createPlanDigest(this.domain, {
-      agent: (await this.contract.agent()) as string,
-      capPerExec: args.capPerExec,
-      capPerPeriod: args.capPerPeriod,
-      periodSecs: args.periodSecs,
-      assetListHash: args.assetListHash,
-      nonce: args.nonce,
-    });
+    const digest = await this.buildCreatePlanDigest(args);
     this.assertSigner(digest, args.ownerSig, args.owner, "createPlan");
 
-    const tx = await this.contract.createPlan(
+    const tx = await this.writeContract().createPlan(
       args.owner,
       args.capPerExec,
       args.capPerPeriod,
@@ -155,7 +185,7 @@ export class RelayClient {
       nonce: args.nonce,
     });
     this.assertSigner(digest, args.ownerSig, args.owner, "revokePlan");
-    const tx = await this.contract.revokePlanFor(
+    const tx = await this.writeContract().revokePlanFor(
       args.planId,
       args.nonce,
       args.ownerSig,
@@ -190,7 +220,7 @@ export class RelayClient {
   private extractPlanId(receipt: TransactionReceipt): bigint {
     for (const log of receipt.logs) {
       try {
-        const parsed = this.contract.interface.parseLog(log);
+        const parsed = this.reader.interface.parseLog(log);
         if (parsed?.name === "PlanCreated") return parsed.args.id as bigint;
       } catch {
         // not our event

@@ -20,14 +20,19 @@ import { fmtUsd } from "@/lib/format";
  *   what happens (one plain sentence) → cost preview (fees: ONE number,
  *   expandable to the split) → simulation summary → the confirm button.
  *
- * Module 10: replace this file with the real C6 keeping these props:
+ * This IS C6 (module 10 promoted the interim sheet in place — every doc-06
+ * caller keeps working). The contract:
  *   { open, onOpenChange, sentence, fees?, summary?, confirmLabel, onConfirm,
- *     busy?, error?, children? }
+ *     busy?, done?, error?, children?, typedWord? }
  *
  * G12 note: this is a DECISION surface — the expandable split uses the
  * canon-safe labels "Execution / Service / Liquidity", never operational
  * vocabulary. `children` renders below the summary (the sweep flow puts its
  * progress/result region there) — the confirm button hides once `done`.
+ * `typedWord` (Revoke-all only, doc 13) gates Confirm behind typing the word
+ * verbatim; single-card revoke passes no typedWord and confirms plainly. The
+ * button always reads "Confirm", never "Sign". Esc cancels; focus is trapped
+ * by the underlying Sheet (Radix Dialog).
  */
 export interface ConfirmSheetProps {
   open: boolean;
@@ -46,6 +51,8 @@ export interface ConfirmSheetProps {
   done?: boolean;
   error?: string | null;
   children?: React.ReactNode;
+  /** Revoke-all only (doc 13): require typing this word before Confirm enables. */
+  typedWord?: string;
 }
 
 export function ConfirmSheet({
@@ -60,8 +67,11 @@ export function ConfirmSheet({
   done,
   error,
   children,
+  typedWord,
 }: ConfirmSheetProps) {
   const [splitOpen, setSplitOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const typedOk = !typedWord || typed.trim().toUpperCase() === typedWord.toUpperCase();
 
   return (
     <Sheet open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
@@ -100,6 +110,21 @@ export function ConfirmSheet({
 
           {children}
 
+          {typedWord && !done && (
+            <label className="flex flex-col gap-1 text-small text-muted-foreground">
+              Type <span className="font-medium text-foreground">{typedWord}</span> to confirm
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                className="rounded-md border border-border bg-transparent px-3 py-2 text-foreground tnum"
+                aria-label={`Type ${typedWord} to confirm`}
+              />
+            </label>
+          )}
+
           {error && <p className="text-small text-negative">{error}</p>}
         </div>
 
@@ -108,7 +133,7 @@ export function ConfirmSheet({
             <Button
               type="button"
               onClick={onConfirm}
-              disabled={busy}
+              disabled={busy || !typedOk}
               aria-busy={busy || undefined}
             >
               {busy ? "Working…" : confirmLabel}

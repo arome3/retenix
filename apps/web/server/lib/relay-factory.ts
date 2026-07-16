@@ -6,6 +6,14 @@ import { RelayClient } from "./relay";
 export interface PlanRelay {
   domain: { chainId: number; contract: string };
   authNonce(owner: string): Promise<bigint>;
+  agentAddress(): Promise<string>;
+  buildCreatePlanDigest(args: {
+    capPerExec: bigint;
+    capPerPeriod: bigint;
+    periodSecs: number;
+    assetListHash: string;
+    nonce: bigint;
+  }): Promise<string>;
   createPlan(args: {
     owner: string;
     capPerExec: bigint;

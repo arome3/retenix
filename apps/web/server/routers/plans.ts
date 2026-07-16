@@ -22,6 +22,7 @@ import {
   plansPausePayloadSchema,
   plansRevokePayloadSchema,
   plansSetAutonomyPayloadSchema,
+  revokePlanDigest,
   withSig,
   type PlansActivatePayload,
   type PlansRevokePayload,
@@ -55,6 +56,25 @@ export interface PlanCardData {
   params: unknown;
 }
 
+/** The C6 preview + the exact digest the owner signs (prepareActivation). */
+export interface PrepareActivation {
+  broker: import("@retenix/shared").BrokerSection | null;
+  guardian: import("@retenix/shared").GuardianSection | null;
+  legacy: import("@retenix/shared").LegacySection | null;
+  standaloneGuardian: boolean;
+  createPlan: {
+    /** 32-byte digest the owner personal_signs. */
+    digest: string;
+    /** authNonces(owner) at build time — returned in createPlanAuth. */
+    nonce: string;
+    capPerExecUsd: number;
+    capPerPeriodUsd: number;
+    periodSecs: number;
+    assetIds: string[];
+    assetListHash: string;
+  } | null;
+}
+
 export const plansRouter = router({
   // -------------------------------------------------------------------------
   // list — the S3 roster (non-revoked cards, newest first). Read-only gated.
@@ -82,6 +102,62 @@ export const plansRouter = router({
         })),
     };
   }),
+
+  // -------------------------------------------------------------------------
+  // prepareActivation (PROPOSED helper query) — the C6 preview: resolve the
+  // draft, show the EXACT onchain terms, and hand back the createPlan digest
+  // the owner must personal_sign. The digest is built with the AUTHORITATIVE
+  // nonce (read server-side), so the signature the client returns commits to
+  // precisely the caps/hash/period the server will relay (doc 10 security).
+  // Read-only; no signature (the activation itself is the signed mutation).
+  // -------------------------------------------------------------------------
+  prepareActivation: gatedProcedure
+    .input(plansActivatePayloadSchema.pick({ draftId: true, accept: true, edits: true }))
+    .query(async ({ ctx, input }): Promise<PrepareActivation> => {
+      const stored = await readStoredDraft(ctx.db, ctx.session.userId, input.draftId);
+      if (!stored) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "draft expired — parse again" });
+      }
+      const resolved = resolveActivation({
+        draft: stored.draft,
+        accept: input.accept,
+        edits: input.edits,
+        region: ctx.session.region,
+      });
+      if (!resolved.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: resolved.reason });
+      }
+
+      const out: PrepareActivation = {
+        broker: resolved.broker ?? null,
+        guardian: resolved.guardian ?? null,
+        legacy: resolved.legacy ?? null,
+        standaloneGuardian: resolved.standaloneGuardian,
+        createPlan: null,
+      };
+
+      if (resolved.broker && resolved.onchain) {
+        const relay = getPlanRelay();
+        const nonce = await relay.authNonce(ctx.session.eoaAddr);
+        const digest = await relay.buildCreatePlanDigest({
+          capPerExec: resolved.onchain.capPerExec,
+          capPerPeriod: resolved.onchain.capPerPeriod,
+          periodSecs: resolved.onchain.periodSecs,
+          assetListHash: resolved.onchain.assetListHash,
+          nonce,
+        });
+        out.createPlan = {
+          digest,
+          nonce: nonce.toString(),
+          capPerExecUsd: Number(resolved.onchain.capPerExec) / 1e6,
+          capPerPeriodUsd: Number(resolved.onchain.capPerPeriod) / 1e6,
+          periodSecs: resolved.onchain.periodSecs,
+          assetIds: resolved.onchain.assetIds,
+          assetListHash: resolved.onchain.assetListHash,
+        };
+      }
+      return out;
+    }),
 
   // -------------------------------------------------------------------------
   // activate — draft → owner signature → relayed createPlan → active card(s).
@@ -301,6 +377,30 @@ export const plansRouter = router({
 
       return { cards };
     }),
+
+  // -------------------------------------------------------------------------
+  // prepareRevoke (PROPOSED helper query) — the revoke digest + authoritative
+  // nonce the owner personal_signs. Returns null digest for a draft/standalone
+  // card (no onchain authority → revoked in the DB only).
+  // -------------------------------------------------------------------------
+  prepareRevoke: gatedProcedure
+    .input(plansPausePayloadSchema)
+    .query(
+      async ({
+        ctx,
+        input,
+      }): Promise<{ digest: string; nonce: string } | { digest: null }> => {
+        const plan = await requireOwnedPlan(ctx.db, ctx.session.userId, input.planId);
+        if (plan.contractPlanId === null) return { digest: null };
+        const relay = getPlanRelay();
+        const nonce = await relay.authNonce(ctx.session.eoaAddr);
+        const digest = revokePlanDigest(relay.domain, {
+          id: BigInt(plan.contractPlanId),
+          nonce,
+        });
+        return { digest, nonce: nonce.toString() };
+      },
+    ),
 
   // -------------------------------------------------------------------------
   // revoke — relayed revokePlanFor → card(s) revoked. Security-critical: this
