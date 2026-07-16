@@ -10,6 +10,27 @@ import type { Page } from "@playwright/test";
 
 type Handler = (input: unknown) => unknown | Promise<unknown>;
 
+/**
+ * Home's portfolio queries (doc 12) ride the SAME httpBatchLink batch as
+ * account.summary/sweep.preview — an unhandled procedure un-mocks the whole
+ * batch. Specs that mock any Home query must spread these too (an empty,
+ * honest statement) unless they mean to hit the real portfolio routes.
+ */
+export const emptyPortfolioMocks: Record<string, Handler> = {
+  "portfolio.holdings": () => ({
+    holdings: [],
+    totalUsd: 0,
+    costBasisUsd: 0,
+    returnUsd: null,
+    returnPct: null,
+    asOf: new Date().toISOString(),
+    unattributedBuys: 0,
+  }),
+  "portfolio.chart": () => ({ points: [], asOf: new Date().toISOString() }),
+  "portfolio.topUpPrompt": () => null,
+  "activity.feed": () => ({ items: [] }),
+};
+
 export async function mockTrpc(
   page: Page,
   handlers: Record<string, Handler>,

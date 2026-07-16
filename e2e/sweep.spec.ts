@@ -6,7 +6,7 @@ import {
   signIn,
   type TestUser,
 } from "./support/session";
-import { mockTrpc } from "./support/trpc-mock";
+import { emptyPortfolioMocks, mockTrpc } from "./support/trpc-mock";
 
 /*
  * The dust-sweep prompt + confirmation flow (doc 06). PS-F2-AC2's UI half:
@@ -59,7 +59,8 @@ test("the prompt card renders the canonical copy with live numbers", async ({
   page,
 }) => {
   await mockTrpc(page, {
-    "account.summary": () => SUMMARY,
+    ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
+      "account.summary": () => SUMMARY,
     "sweep.preview": () => PREVIEW,
   });
   await page.goto("/home");
@@ -80,7 +81,8 @@ test("PS-F2-AC2 (UI half): ONE confirmation drives the whole batch — no second
   page,
 }) => {
   await mockTrpc(page, {
-    "account.summary": () => SUMMARY,
+    ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
+      "account.summary": () => SUMMARY,
     "sweep.preview": () => PREVIEW,
   });
   await page.goto("/home");
@@ -110,7 +112,8 @@ test("PS-F2-AC2 (UI half): ONE confirmation drives the whole batch — no second
 test("dismissal is remembered and silence does nothing", async ({ page }) => {
   let dismissed = false;
   await mockTrpc(page, {
-    "account.summary": () => SUMMARY,
+    ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
+      "account.summary": () => SUMMARY,
     "sweep.preview": () => ({ ...PREVIEW, dismissed }),
     "sweep.dismiss": () => {
       dismissed = true;
@@ -131,7 +134,8 @@ test("dismissal is remembered and silence does nothing", async ({ page }) => {
 
 test("no prompt below the $1 threshold or after a sweep", async ({ page }) => {
   await mockTrpc(page, {
-    "account.summary": () => SUMMARY,
+    ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
+      "account.summary": () => SUMMARY,
     "sweep.preview": () => ({ ...PREVIEW, totalUsd: 0.8 }),
   });
   await page.goto("/home");
@@ -139,7 +143,8 @@ test("no prompt below the $1 threshold or after a sweep", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Found money" })).toBeHidden();
 
   await mockTrpc(page, {
-    "account.summary": () => SUMMARY,
+    ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
+      "account.summary": () => SUMMARY,
     "sweep.preview": () => ({ ...PREVIEW, hasSwept: true }),
   });
   await page.goto("/home");

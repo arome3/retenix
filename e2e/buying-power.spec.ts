@@ -7,7 +7,7 @@ import {
   signIn,
   type TestUser,
 } from "./support/session";
-import { mockTrpc } from "./support/trpc-mock";
+import { emptyPortfolioMocks, mockTrpc } from "./support/trpc-mock";
 
 /*
  * C1/C2/BreakdownSheet (doc 06): PS-F2-AC1 (<5s warm hero), PS-F2-AC3 (live
@@ -60,6 +60,7 @@ test.beforeEach(async ({ context, page }) => {
   await mockTrpc(
     page,
     {
+      ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
       "account.summary": () => SUMMARY,
       "sweep.preview": () => EMPTY_PREVIEW,
     },
@@ -105,6 +106,7 @@ test("skeleton renders before the amount (never a spinner over money)", async ({
   await mockTrpc(
     page,
     {
+      ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
       "account.summary": () => SUMMARY,
       "sweep.preview": () => EMPTY_PREVIEW,
     },
@@ -145,6 +147,7 @@ test("the pill count is live data, not copy — 2 sources reads 2", async ({
   page,
 }) => {
   await mockTrpc(page, {
+    ...emptyPortfolioMocks, // Home also queries portfolio.* (doc 12) — same batch
     "account.summary": () => ({
       ...SUMMARY,
       buyingPowerUsd: 150,

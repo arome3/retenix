@@ -41,11 +41,31 @@ export interface PortfolioChartProps {
   isPending?: boolean;
 }
 
-function token(name: string): string {
-  return getComputedStyle(document.documentElement)
+// lightweight-charts parses colors with its OWN parser (hex/rgb/hsl only) —
+// handing it a raw token fails: Chromium serializes the OKLCH tokens as
+// lab(…) (the same quirk module 02 recorded for axe-core), which the chart
+// rejects at init. A 1×1 canvas normalizes ANY css color the browser can
+// paint into plain rgb components.
+function resolveToken(name: string): { r: number; g: number; b: number } | null {
+  const value = getComputedStyle(document.documentElement)
     .getPropertyValue(name)
     .trim();
+  if (!value) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.fillStyle = value;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  return { r, g, b };
 }
+
+const rgb = (c: { r: number; g: number; b: number }): string =>
+  `rgb(${c.r}, ${c.g}, ${c.b})`;
+const rgba = (c: { r: number; g: number; b: number }, a: number): string =>
+  `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`;
 
 export function PortfolioChart({
   points,
@@ -100,12 +120,13 @@ export function PortfolioChart({
       const { createChart, AreaSeries } = await import("lightweight-charts");
       if (cancelled) return;
 
-      const teal = token("--primary");
+      const teal = resolveToken("--primary") ?? { r: 45, g: 130, b: 140 };
+      const mutedText = resolveToken("--muted-foreground");
       chart = createChart(el, {
         autoSize: true,
         layout: {
           background: { color: "transparent" },
-          textColor: token("--muted-foreground"),
+          ...(mutedText ? { textColor: rgb(mutedText) } : {}),
           // attributionLogo deliberately untouched — default ON (NOTICE).
         },
         grid: {
@@ -118,10 +139,10 @@ export function PortfolioChart({
         handleScale: false,
       });
       const series = chart.addSeries(AreaSeries, {
-        lineColor: teal,
-        // graphite-toned gradient off the teal token (doc 01) — sits on card.
-        topColor: `color-mix(in oklab, ${teal} 24%, transparent)`,
-        bottomColor: "transparent",
+        lineColor: rgb(teal),
+        // teal-toned gradient over the graphite/paper surface (doc 01).
+        topColor: rgba(teal, 0.24),
+        bottomColor: rgba(teal, 0),
         lineWidth: 2,
         priceLineVisible: false,
         lastValueVisible: false,
@@ -197,12 +218,15 @@ export function PortfolioChart({
         })}
       </fieldset>
 
+      {/* role=group, not img: the TradingView attribution anchor inside is
+          focusable (it must stay reachable — NOTICE), and img would strip it
+          from the tree. The label is the doc-12 spoken summary. */}
       <div
-        role="img"
+        role="group"
         aria-label={`Portfolio value${deltaSpoken} over ${spoken}`}
         className="relative"
       >
-        <div ref={containerRef} className="h-44 w-full" aria-hidden="true" />
+        <div ref={containerRef} className="h-44 w-full" />
         {empty ? (
           <p className="absolute inset-0 grid place-items-center text-small text-muted-foreground">
             Portfolio history appears within an hour.

@@ -54,9 +54,12 @@ const rootVars = blockVars(":root");
 const darkVars = blockVars(".dark");
 const cvdVars = blockVars(".cvd");
 const cvdLightVars = blockVars(".cvd:not(.dark)");
+// Plain-light-only companions (doc 12) — scoped so they can't cascade over
+// the later-authored .dark/.cvd blocks the way a bare :root would.
+const lightOnlyVars = blockVars(":root:not(.dark):not(.cvd)");
 
 const themes: Record<string, Vars> = {
-  light: resolveVars({ ...rootVars }),
+  light: resolveVars({ ...rootVars, ...lightOnlyVars }),
   dark: resolveVars({ ...rootVars, ...darkVars }),
   "light+cvd": resolveVars({ ...rootVars, ...cvdVars, ...cvdLightVars }),
   "dark+cvd": resolveVars({ ...rootVars, ...darkVars, ...cvdVars }),

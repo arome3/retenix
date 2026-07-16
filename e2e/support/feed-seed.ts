@@ -89,6 +89,25 @@ export async function seedExecution(
   return rows[0].id;
 }
 
+/** doc 12: one portfolio_snapshots row — the worker cron's exact shape. */
+export async function seedSnapshot(
+  user: TestUser,
+  seed: {
+    totalUsd: number;
+    perAsset?: Record<
+      string,
+      { qty: number; markUsd: number; valueUsd: number; stale?: boolean }
+    >;
+    at: Date;
+  },
+): Promise<void> {
+  await dbQuery(
+    `insert into portfolio_snapshots (user_id, total_usd, per_asset_json, at)
+     values ($1, $2, $3, $4)`,
+    [user.userId, seed.totalUsd, JSON.stringify(seed.perAsset ?? {}), seed.at],
+  );
+}
+
 export async function seedEvent(
   user: TestUser,
   type: string,

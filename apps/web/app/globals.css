@@ -80,12 +80,6 @@
   --warning-foreground: oklch(0.22 0.01 250);
   /* light theme: max two soft shadows @6% (DS-4.3) */
   --surface-shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 8px 24px oklch(0 0 0 / 0.06);
-  /* PROPOSED (doc 12, module-01 open question closed): §11's light gain-500
-     measures 4.32:1 on paper — below 4.5 for small delta text. 0.52 measures
-     4.93/4.51 on paper-50/100 and 4.85 under white fills, so delta text is
-     token-colored at every size and the CVD swap stays app-wide. Design-owner
-     review flagged in HANDOFF (module 12). */
-  --positive: oklch(0.52 0.14 152);
   /* Allocation ring ramp (C9, doc 12) — teal-tinted NEUTRALS, never gain/loss
      (G14). Segments take tokens 1..n largest-first; three luminance levels
      alternate (1 = extreme, 2/4 mid, 3/5 far) because a monotonic 5-step ramp
@@ -128,6 +122,16 @@
 .cvd:not(.dark) {
   --positive: oklch(0.50 0.14 240);
   --negative: oklch(0.52 0.13 60);
+}
+/* PROPOSED (doc 12, closes module 01's open question): §11's light gain-500
+   measures 4.32:1 on paper — below 4.5 for small delta text. 0.52 measures
+   4.93/4.51 on paper-50/100 and 4.85 under white fills, so delta text is
+   token-colored at every size. Scoped to PLAIN LIGHT only — this block sits
+   after §11's .dark/.cvd with equal-or-lower specificity, so an unscoped
+   :root override would clobber both (the e2e computed-style probe caught
+   exactly that). Design-owner review flagged in HANDOFF (module 12). */
+:root:not(.dark):not(.cvd) {
+  --positive: oklch(0.52 0.14 152);
 }
 
 @theme inline {
