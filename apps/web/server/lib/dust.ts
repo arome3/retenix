@@ -105,8 +105,10 @@ function evmSources(): EvmSource[] {
 
 const SOLANA_CHAIN_ID = 101;
 const SOLANA_PRICE_NETWORK = "solana-mainnet";
-// Classic SPL Token + Token-2022 — dust lives under both programs.
-const SOLANA_TOKEN_PROGRAMS = [
+// Classic SPL Token + Token-2022 — dust lives under both programs. Exported
+// for doc 12's holdings reader, which scans the SAME owner with the inverse
+// filter (registry mints only) — one program list, zero drift.
+export const SOLANA_TOKEN_PROGRAMS = [
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
 ];
@@ -449,7 +451,8 @@ export function alchemyKeyFromEnv(): string | null {
   return null;
 }
 
-async function jsonRpc(
+// Exported for doc 12's holdings deps — the repo keeps ONE json-rpc helper.
+export async function jsonRpc(
   url: string,
   method: string,
   params: unknown[],

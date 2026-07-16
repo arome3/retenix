@@ -19,6 +19,10 @@ export const BASIS_QTY_TOLERANCE = 0.02;
 /** Below this, a position is dust-of-dust and does not exist to the statement. */
 export const QTY_EPSILON = 1e-9;
 
+/** PROPOSED (doc 12) — per-user holdings cache TTL, the account-summary
+ *  precedent (packages/shared sweep.ts ACCOUNT_SUMMARY_CACHE_TTL_MS). */
+export const PORTFOLIO_HOLDINGS_CACHE_TTL_MS = 30_000;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

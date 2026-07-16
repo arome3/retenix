@@ -45,6 +45,12 @@ const clientSchema = z.object({
   NEXT_PUBLIC_PARTICLE_CLIENT_KEY: z.string().min(1),
   NEXT_PUBLIC_PARTICLE_APP_UUID: z.string().min(1),
   NEXT_PUBLIC_SENTRY_DSN: z.string().min(1),
+  // PROPOSED (doc 12) — the ONE flag the doc puts its open questions behind:
+  // "1" = live Jupiter display marks + the Sell action; "0" = last-trade
+  // marks only, Sell hidden (and its mutation refuses). Client-inlined AND
+  // server-readable; the worker mirrors the marks half as PORTFOLIO_MARKS
+  // (separate process env — set the two together). Owner review by W3.
+  NEXT_PUBLIC_PORTFOLIO_LIVE: z.enum(["0", "1"]).default("1"),
 });
 
 function invalid(names: string[]): never {
@@ -65,6 +71,7 @@ const parsedClient = clientSchema.safeParse({
   NEXT_PUBLIC_PARTICLE_CLIENT_KEY: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
   NEXT_PUBLIC_PARTICLE_APP_UUID: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
   NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  NEXT_PUBLIC_PORTFOLIO_LIVE: process.env.NEXT_PUBLIC_PORTFOLIO_LIVE,
 });
 if (!parsedClient.success) invalid(issueNames(parsedClient.error));
 
