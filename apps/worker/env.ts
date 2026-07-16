@@ -41,6 +41,10 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   // Used only to fence dev-only affordances (raw agent key) out of prod.
   NODE_ENV: z.string().optional(),
+  // DEMO-gated fault injection (doc 08 failure rehearsal): with DEMO_MODE=1,
+  // executeLegForUser corrupts the root signature so the UA rejects the send
+  // server-side — the honest failure ladder runs without moving funds.
+  FAULT_INJECT_UA: z.enum(["corrupt-root-sig"]).optional(),
 });
 
 const parsed = schema.safeParse(process.env);

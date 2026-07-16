@@ -72,6 +72,9 @@ export default tseslint.config(
       // like config/tooling scripts rather than app runtime.
       "packages/ua/scripts/**/*.ts",
       "packages/registry/scripts/**/*.ts",
+      // Worker rehearsal/smoke CLIs (doc 08): env-gated mainnet tools reading
+      // opt-in override vars (WORKER_URL, STAGING_*, RETENIX_CONFIRM_SPEND).
+      "apps/worker/scripts/**/*.ts",
       "**/*.test.{ts,tsx}",
       "**/*.spec.{ts,tsx}",
       "**/*.config.{js,mjs,cjs,ts,mts}",

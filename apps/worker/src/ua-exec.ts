@@ -89,6 +89,29 @@ export function agentUaFor(agent: AgentSigner): UniversalAccount {
 
 const NOT_FOUND_RE = /not.?found|404|no such|does not exist|invalid.*transaction.?id/i;
 
+/** DEMO-gated fault injection (doc 08 failure rehearsal): corrupt the root
+ *  signature's final byte so Particle rejects the send server-side — the
+ *  honest failure ladder (refund → retry → skip) runs on mainnet without
+ *  moving funds. Inert unless BOTH DEMO_MODE=1 and FAULT_INJECT_UA are set. */
+function withFaultInjection(inner: UaSigner): UaSigner {
+  if (env.DEMO_MODE !== "1" || env.FAULT_INJECT_UA !== "corrupt-root-sig") {
+    return inner;
+  }
+  console.warn(
+    "[worker] FAULT_INJECT_UA=corrupt-root-sig ACTIVE — every UA send will be rejected (rehearsal only)",
+  );
+  return {
+    sign7702Auth: (a) => inner.sign7702Auth(a),
+    async signRootHash(rootHash: string): Promise<string> {
+      const sig = await inner.signRootHash(rootHash);
+      const flipped = (Number.parseInt(sig.slice(-2), 16) ^ 0xff)
+        .toString(16)
+        .padStart(2, "0");
+      return sig.slice(0, -2) + flipped;
+    },
+  };
+}
+
 /**
  * THE G3 seam. `plan`/`leg` are accepted (and today ignored) so the swap to
  * a user-UA model — delegated backend signing or a plan-scoped execution
@@ -100,7 +123,7 @@ export function executeLegForUser(
   agent: AgentSigner,
 ): UaLegExec {
   const ua = agentUa(agent);
-  const signer: UaSigner = agent.uaSigner;
+  const signer: UaSigner = withFaultInjection(agent.uaSigner);
 
   return {
     ownerAddress: agent.address,
