@@ -355,9 +355,9 @@ export async function verifyLegTerminal(
   try {
     fees = parseFeeTotals(polled.t as { feeQuotes?: unknown[] });
     // parseFeeTotals collapses a missing split to zeros; an all-zero parse
-    // means "the payload carried no fee data", not "free" — the client's
-    // quoted split is the honest fallback there (G8 discipline).
-    if (fees.total === 0 && fees.gas === 0 && fees.service === 0 && fees.lp === 0) {
+    // (all four components) means "the payload carried no fee data", not
+    // "free" — the client's quoted split is the honest fallback (G8).
+    if (Object.values(fees).every((v) => v === 0)) {
       fees = undefined;
     }
   } catch {
