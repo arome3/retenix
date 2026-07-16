@@ -194,10 +194,41 @@ export class RelayClient {
     return { txHash: receipt.hash, receipt };
   }
 
-  /** revokeAll digest verification is exposed for module 13; not relayed here. */
+  /** revokeAll digest verification — the pre-submit guard for revokeAll(). */
   verifyRevokeAll(owner: string, nonce: bigint, ownerSig: string): boolean {
     const digest = revokeAllDigest(this.domain, { nonce });
     return recoverDigestSigner(digest, ownerSig).toLowerCase() === owner.toLowerCase();
+  }
+
+  /**
+   * Relay revokeAll (module 13's kill switch) — SEND-ONLY, deliberately
+   * unlike revokePlanFor: kill.execute must return the liquidation work items
+   * the instant authority revocation is in flight, and a congested RPC's
+   * tx.wait() would hold the legs hostage (inverting doc 13's "authority dies
+   * fastest, legs start immediately" ordering). Confirmation is read lazily
+   * via txStatus(); the contract call is idempotent over already-revoked
+   * plans, so a duplicate submission converges.
+   */
+  async revokeAll(args: {
+    owner: string;
+    nonce: bigint;
+    ownerSig: string;
+  }): Promise<{ txHash: string }> {
+    const digest = revokeAllDigest(this.domain, { nonce: args.nonce });
+    this.assertSigner(digest, args.ownerSig, args.owner, "revokeAll");
+    const tx = await this.writeContract().revokeAll(
+      args.owner,
+      args.nonce,
+      args.ownerSig,
+    );
+    return { txHash: tx.hash as string };
+  }
+
+  /** Lazy confirmation read for a sent tx (kill.status's revoked flag). */
+  async txStatus(txHash: string): Promise<"pending" | "confirmed" | "failed"> {
+    const receipt = await this.provider.getTransactionReceipt(txHash);
+    if (receipt === null) return "pending";
+    return receipt.status === 1 ? "confirmed" : "failed";
   }
 
   private assertSigner(

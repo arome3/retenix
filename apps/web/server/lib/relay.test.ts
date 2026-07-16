@@ -1,12 +1,13 @@
 import {
   createPlanDigest,
+  revokeAllDigest,
   revokePlanDigest,
   signPolicyDigest,
   type PolicyDomain,
 } from "@retenix/shared";
 import { Wallet, getBytes, hashMessage, recoverAddress } from "ethers";
 import { describe, expect, it } from "vitest";
-import { recoverDigestSigner } from "./relay";
+import { RelayClient, recoverDigestSigner } from "./relay";
 
 // The relay recovers an owner from a personal_sign'd policy digest exactly the
 // way RetenixPolicy._recover does on-chain (module 07 CrossImpl proves the
@@ -64,5 +65,45 @@ describe("recoverDigestSigner (relay ⟷ contract auth parity)", () => {
     expect(recoverDigestSigner(digest, sig).toLowerCase()).not.toBe(
       owner.address.toLowerCase(),
     );
+  });
+
+  it("recovers the revokeAll signer (module 13's kill relay)", async () => {
+    const owner = Wallet.createRandom();
+    const digest = revokeAllDigest(DOMAIN, { nonce: 4n });
+    const sig = await signPolicyDigest(owner, digest);
+    expect(recoverDigestSigner(digest, sig).toLowerCase()).toBe(
+      owner.address.toLowerCase(),
+    );
+  });
+});
+
+describe("RelayClient.revokeAll / verifyRevokeAll (module 13)", () => {
+  // The client's domain comes from the vitest web env (chain 421614). All
+  // assertions here stay OFF the network: a signature mismatch must throw
+  // BEFORE writeContract() is ever consulted (never spend relayer gas on a
+  // known-BadSignature call).
+  it("verifyRevokeAll accepts the owner's signature and rejects a foreign one", async () => {
+    const relay = new RelayClient();
+    const owner = Wallet.createRandom();
+    const other = Wallet.createRandom();
+    const digest = revokeAllDigest(relay.domain, { nonce: 2n });
+    const ownerSig = await signPolicyDigest(owner, digest);
+    const otherSig = await signPolicyDigest(other, digest);
+    expect(relay.verifyRevokeAll(owner.address, 2n, ownerSig)).toBe(true);
+    expect(relay.verifyRevokeAll(owner.address, 2n, otherSig)).toBe(false);
+    // a signature over a DIFFERENT nonce never verifies (digest commits to it)
+    const staleSig = await signPolicyDigest(owner, revokeAllDigest(relay.domain, { nonce: 1n }));
+    expect(relay.verifyRevokeAll(owner.address, 2n, staleSig)).toBe(false);
+  });
+
+  it("revokeAll never submits when the signature does not recover to the owner", async () => {
+    const relay = new RelayClient();
+    const owner = Wallet.createRandom();
+    const other = Wallet.createRandom();
+    const digest = revokeAllDigest(relay.domain, { nonce: 0n });
+    const forged = await signPolicyDigest(other, digest);
+    await expect(
+      relay.revokeAll({ owner: owner.address, nonce: 0n, ownerSig: forged }),
+    ).rejects.toThrow(/signature does not recover to the owner/);
   });
 });

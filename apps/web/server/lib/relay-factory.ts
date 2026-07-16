@@ -30,6 +30,16 @@ export interface PlanRelay {
     nonce: bigint;
     ownerSig: string;
   }): Promise<{ txHash: string }>;
+  /** Module 13: verify a revokeAll owner-signature (pre-submit guard). */
+  verifyRevokeAll(owner: string, nonce: bigint, ownerSig: string): boolean;
+  /** Module 13: relay revokeAll — send-only (see RelayClient.revokeAll). */
+  revokeAll(args: {
+    owner: string;
+    nonce: bigint;
+    ownerSig: string;
+  }): Promise<{ txHash: string }>;
+  /** Module 13: lazy confirmation read for the revoked flag. */
+  txStatus(txHash: string): Promise<"pending" | "confirmed" | "failed">;
 }
 
 /** Default: the real chain client. Overridden in tests via setPlanRelayFactory. */

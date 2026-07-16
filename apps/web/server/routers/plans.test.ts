@@ -125,6 +125,10 @@ function stubRelay(overrides: Partial<PlanRelay> = {}): PlanRelay & {
       calls.revoke += 1;
       return { txHash: "0xrevoke" };
     },
+    // module 13 surface — unused by plans.*, present to satisfy the interface
+    verifyRevokeAll: () => true,
+    revokeAll: async () => ({ txHash: "0xrevokeall" }),
+    txStatus: async () => "confirmed" as const,
     ...overrides,
   };
   return Object.assign(relay, { calls });
