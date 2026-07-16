@@ -1,4 +1,4 @@
-import { portfolioSnapshots, users } from "@retenix/db";
+import { events, portfolioSnapshots, users } from "@retenix/db";
 import {
   bucketSnapshots,
   CHART_RANGES,
@@ -6,7 +6,7 @@ import {
   type ChartPoint,
 } from "@retenix/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   computeHoldings,
@@ -92,4 +92,43 @@ export const portfolioRouter = router({
         };
       },
     ),
+
+  // Top-up prompt (doc 12 renders; doc 08 emits). The filter is load-bearing:
+  // the SAME event type also fires with cause revoked/paused (executor.ts) —
+  // only an insufficient-buying-power skip on an OPTED-IN plan may prompt.
+  // Separate from `holdings` on purpose: that route serves stale from its
+  // cache, and a prompt must never freeze into a stale statement. Window is
+  // 7 days (PROPOSED) — a month-old skip is history, not a prompt. Dismissal
+  // is client sessionStorage (PROPOSED; the sweep card's dismissal has a
+  // server event because doc 06 mandates one — this one doesn't).
+  topUpPrompt: gatedProcedure.query(
+    async ({
+      ctx,
+    }): Promise<{ shortUsd: number | null; at: string } | null> => {
+      const since = new Date(Date.now() - 7 * 86_400_000);
+      const [row] = await ctx.db
+        .select({ payloadJson: events.payloadJson, createdAt: events.createdAt })
+        .from(events)
+        .where(
+          and(
+            eq(events.userId, ctx.session.userId),
+            eq(events.type, "execution.skipped"),
+            gte(events.createdAt, since),
+            sql`${events.payloadJson}->>'cause' = 'insufficient-buying-power'`,
+            sql`${events.payloadJson}->>'topUpOptIn' = 'true'`,
+          ),
+        )
+        .orderBy(desc(events.createdAt))
+        .limit(1);
+      if (!row) return null;
+      const shortUsd = (row.payloadJson as { shortUsd?: unknown }).shortUsd;
+      return {
+        shortUsd:
+          typeof shortUsd === "number" && Number.isFinite(shortUsd)
+            ? shortUsd
+            : null,
+        at: row.createdAt.toISOString(),
+      };
+    },
+  ),
 });

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { BuyingPowerHeader } from "@/components/BuyingPowerHeader";
 import { KillSwitchSlot } from "@/components/KillSwitchSlot";
+import { MiniFeed } from "@/components/MiniFeed";
 import { PortfolioSection } from "@/components/PortfolioSection";
 import { SweepPromptCard } from "@/components/SweepPromptCard";
+import { TopUpPromptCard } from "@/components/TopUpPromptCard";
 import { requireSession } from "@/server/require-session";
 
 export const metadata: Metadata = { title: "Home" };
@@ -26,12 +28,18 @@ export default async function HomePage() {
 
       <SweepPromptCard eoa={session.eoa} />
 
+      {/* PROPOSED placement (doc 12): the doc-08 skip prompt sits between the
+          sweep prompt and the portfolio; renders only when doc 08 emitted one. */}
+      <TopUpPromptCard />
+
       <section aria-labelledby="portfolio-heading" className="space-y-4">
         <h2 id="portfolio-heading" className="font-display text-h1">
           Portfolio
         </h2>
         <PortfolioSection />
       </section>
+
+      <MiniFeed />
     </div>
   );
 }

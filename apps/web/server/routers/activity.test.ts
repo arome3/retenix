@@ -409,6 +409,25 @@ describe("activity.feed", () => {
     expect(ids.has(`ex_${pairB}`)).toBe(true);
   });
 
+  it("honors the additive limit param (doc 12 mini-feed): newest N + cursor", async () => {
+    const userId = await makeUser();
+    const planId = await seedPlan(userId);
+    const jobId = await seedJob(planId);
+    for (let i = 0; i < 5; i++) {
+      await seedExecution(jobId, {
+        status: "finished",
+        receiptText: EXECUTED,
+        createdAt: at(i),
+      });
+    }
+
+    const page = await caller(userId).activity.feed({ filter: "all", limit: 3 });
+    expect(page.items).toHaveLength(3);
+    expect(page.nextCursor).toBeDefined(); // more exist beyond the mini-feed
+    const times = page.items.map((i) => Date.parse(i.at));
+    expect([...times].sort((a, b) => b - a)).toEqual(times); // newest first
+  });
+
   it("rejects a garbage cursor as BAD_REQUEST, never a 500", async () => {
     const userId = await makeUser();
     for (const bad of ["not-base64!!", "aGVsbG8", Buffer.from("{}").toString("base64url")]) {

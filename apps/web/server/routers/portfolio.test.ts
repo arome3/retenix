@@ -427,6 +427,60 @@ describe("portfolio.holdings", () => {
   });
 });
 
+describe("portfolio.topUpPrompt", () => {
+  const skipEvent = (payload: Record<string, unknown>, at: string) =>
+    db.insert(events).values({
+      userId,
+      type: "execution.skipped",
+      payloadJson: payload,
+      createdAt: new Date(at),
+    });
+
+  it("returns the newest insufficient-buying-power skip on an opted-in plan", async () => {
+    await skipEvent(
+      { cause: "insufficient-buying-power", topUpOptIn: true, shortUsd: 3.12 },
+      "2026-07-15T09:00:00.000Z",
+    );
+    await skipEvent(
+      { cause: "insufficient-buying-power", topUpOptIn: true, shortUsd: 4.5 },
+      "2026-07-15T12:00:00.000Z",
+    );
+    const res = await caller().portfolio.topUpPrompt();
+    expect(res).toEqual({ shortUsd: 4.5, at: "2026-07-15T12:00:00.000Z" });
+  });
+
+  it("the cause + optIn filters are load-bearing: revoked/paused skips and opted-out plans never prompt", async () => {
+    await skipEvent(
+      { cause: "revoked", topUpOptIn: true, shortUsd: 1 },
+      "2026-07-15T09:00:00.000Z",
+    );
+    await skipEvent(
+      { cause: "insufficient-buying-power", topUpOptIn: false, shortUsd: 2 },
+      "2026-07-15T10:00:00.000Z",
+    );
+    expect(await caller().portfolio.topUpPrompt()).toBeNull();
+  });
+
+  it("a stale skip (>7 days) is history, not a prompt; malformed shortUsd degrades to null", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-16T12:00:00.000Z"));
+    await skipEvent(
+      { cause: "insufficient-buying-power", topUpOptIn: true, shortUsd: 9 },
+      "2026-07-01T00:00:00.000Z",
+    );
+    expect(await caller().portfolio.topUpPrompt()).toBeNull();
+
+    await skipEvent(
+      { cause: "insufficient-buying-power", topUpOptIn: true, shortUsd: "x" },
+      "2026-07-15T12:00:00.000Z",
+    );
+    expect(await caller().portfolio.topUpPrompt()).toEqual({
+      shortUsd: null,
+      at: "2026-07-15T12:00:00.000Z",
+    });
+    vi.mocked(Date.now).mockRestore();
+  });
+});
+
 describe("portfolio.chart", () => {
   const seedSnapshot = (iso: string, totalUsd: number) =>
     db.insert(portfolioSnapshots).values({

@@ -205,12 +205,16 @@ export const activityRouter = router({
         // page (initialPageParam = initialCursor ?? null).
         cursor: z.string().max(300).nullish(),
         filter: z.enum(["all", "trades", "blocked", "system"]),
+        // Additive (doc 12): Home's mini-feed wants the newest 3 receipts
+        // without pulling a full page. Defaults to PAGE_SIZE — S4 unchanged.
+        limit: z.number().int().min(1).max(PAGE_SIZE).optional(),
       }),
     )
     .query(async ({ ctx, input }): Promise<FeedPage> => {
       const cursor = input.cursor ? decodeCursor(input.cursor) : null;
       const userId = ctx.session.userId;
-      const fetchLimit = PAGE_SIZE + 1; // +1 per source ⇒ hasMore is decidable
+      const pageSize = input.limit ?? PAGE_SIZE;
+      const fetchLimit = pageSize + 1; // +1 per source ⇒ hasMore is decidable
 
       const execStatuses = EXEC_STATUSES_FOR[input.filter];
       const execRows: ExecRow[] =
@@ -277,10 +281,10 @@ export const activityRouter = router({
           (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
       );
 
-      const page = merged.slice(0, PAGE_SIZE);
+      const page = merged.slice(0, pageSize);
       const last = page[page.length - 1];
       const nextCursor =
-        merged.length > PAGE_SIZE && last !== undefined
+        merged.length > pageSize && last !== undefined
           ? encodeCursor(last.createdAt, last.id)
           : undefined;
 
