@@ -17,6 +17,7 @@
     "@sentry/node": "^10",
     "ethers": "^6",
     "node-cron": "^4",
+    "p-queue": "^9.3.1",
     "pg-boss": "^12",
     "zod": "^4"
   },
