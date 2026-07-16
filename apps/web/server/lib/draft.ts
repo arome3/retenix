@@ -43,6 +43,19 @@ export type ResolvedParse =
     };
 
 /**
+ * The region-filtered asset-id tuple (docs 04/05) — SOL/ETH are eligible
+ * everywhere, so this is never empty and the tuple cast is safe.
+ */
+export function regionAssetIds(region: string): [string, ...string[]] {
+  return eligibleAssets(region).map((a) => a.id) as [string, ...string[]];
+}
+
+/** The region-narrowed PolicyDraft schema the parser runs behind. */
+export function regionDraftSchema(region: string) {
+  return policyDraftFor(regionAssetIds(region));
+}
+
+/**
  * Proportionally scale to sum exactly 100 and round to integers with the
  * largest-remainder method. Worked example (doc 09): [60, 30, 20] → /110
  * proportional → [54.54…, 27.27…, 18.18…] → floors sum 99 → +1 to the largest
@@ -183,9 +196,7 @@ export function postProcessDraft(
   if (!clamped.broker && !clamped.guardian && !clamped.legacy) return null;
 
   // Final wall: the response draft must satisfy the REGION-narrowed schema.
-  const ids = eligibleAssets(opts.region).map((a) => a.id);
-  const regionSchema = policyDraftFor(ids as [string, ...string[]]);
-  const checked = regionSchema.safeParse(clamped);
+  const checked = regionDraftSchema(opts.region).safeParse(clamped);
   if (!checked.success) return null;
 
   // PS-10.7: the footer flag rides along whenever the basket's numbers are the

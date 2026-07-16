@@ -17,11 +17,14 @@ import { appRouter } from "./routers";
  * stands in for Magic, because the server only ever recovers a signer from a
  * message — it cannot tell, and must not care, which key custodian produced it.
  *
- * plans.activate is a real signedProcedure whose body throws NOT_IMPLEMENTED
- * (module 10 owns it). That makes it the perfect probe: NOT_IMPLEMENTED means
- * the signature middleware *passed*, and any UNAUTHORIZED means it rejected.
+ * send.execute is a bare signedProcedure whose body throws NOT_IMPLEMENTED
+ * (module 15 owns it) and whose input is withSig(z.unknown()) — the perfect
+ * probe: NOT_IMPLEMENTED means the signature middleware *passed*, and any
+ * UNAUTHORIZED means it rejected. (This test moved off plans.activate when
+ * module 10 gave it a real, typed payload — send.execute keeps the mechanism
+ * test payload-agnostic.)
  */
-const ROUTE = "plans.activate";
+const ROUTE = "send.execute";
 const EMAIL = "signer@example.com";
 const db = getDb();
 const wallet = Wallet.createRandom();
@@ -89,7 +92,7 @@ describe("signedProcedure round trip", () => {
 
     // Reaching the body proves the signature verified against session.eoaAddr.
     await expect(
-      appRouter.createCaller(ctx()).plans.activate({ payload, sig }),
+      appRouter.createCaller(ctx()).send.execute({ payload, sig }),
     ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
   });
 
@@ -99,12 +102,12 @@ describe("signedProcedure round trip", () => {
     const sig = await sign(payload, { nonce, expiry: inFiveMinutes() });
 
     await expect(
-      appRouter.createCaller(ctx()).plans.activate({ payload, sig }),
+      appRouter.createCaller(ctx()).send.execute({ payload, sig }),
     ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
 
     // Byte-identical envelope, second time.
     await expect(
-      appRouter.createCaller(ctx()).plans.activate({ payload, sig }),
+      appRouter.createCaller(ctx()).send.execute({ payload, sig }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: /nonce reused/ });
   });
 
@@ -126,7 +129,7 @@ describe("signedProcedure round trip", () => {
     };
 
     await expect(
-      appRouter.createCaller(ctx()).plans.activate({ payload, sig }),
+      appRouter.createCaller(ctx()).send.execute({ payload, sig }),
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED",
       message: /signer is not the session EOA/,
@@ -140,7 +143,7 @@ describe("signedProcedure round trip", () => {
     await expect(
       appRouter
         .createCaller(ctx())
-        .plans.activate({ payload: { planId: "sent-that" }, sig }),
+        .send.execute({ payload: { planId: "sent-that" }, sig }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
@@ -153,7 +156,7 @@ describe("signedProcedure round trip", () => {
     });
 
     await expect(
-      appRouter.createCaller(ctx()).plans.activate({ payload, sig }),
+      appRouter.createCaller(ctx()).send.execute({ payload, sig }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: /expired/ });
   });
 
@@ -166,7 +169,7 @@ describe("signedProcedure round trip", () => {
     });
 
     await expect(
-      appRouter.createCaller(ctx()).plans.activate({ payload, sig }),
+      appRouter.createCaller(ctx()).send.execute({ payload, sig }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: /5-minute/ });
   });
 
@@ -176,7 +179,7 @@ describe("signedProcedure round trip", () => {
     const anonymous: Context = { ...ctx(), session: null };
 
     await expect(
-      appRouter.createCaller(anonymous).plans.activate({ payload, sig }),
+      appRouter.createCaller(anonymous).send.execute({ payload, sig }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: /sign in required/ });
   });
 });

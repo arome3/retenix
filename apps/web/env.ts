@@ -15,6 +15,18 @@ const serverSchema = z.object({
   INTERNAL_API_TOKEN: z.string().min(1),
   // "1" enables demo-only affordances (rogue-instruction trigger, demo-scaled defaults).
   DEMO_MODE: z.enum(["0", "1"]).default("0"),
+  // PROPOSED (doc 10, spec-silent — flagged in HANDOFF for doc 00's table):
+  // the plan-relay signing key. Dev-only raw key per doc 00's custody rule
+  // (KMS in prod); it pays Arbitrum gas for createPlan/revokePlanFor relays.
+  // Validated as hex at relay construction, not here, so placeholder-cred
+  // boots stay green (module 08's degraded-boot convention).
+  RELAYER_PRIVATE_KEY: z.string().min(1),
+  // PROPOSED (doc 10): which RetenixPolicy deployment plans.* writes —
+  // Arbitrum One in prod/demo, Sepolia for integration rehearsal.
+  POLICY_CHAIN_ID: z.enum(["42161", "421614"]).default("42161"),
+  // Required only when POLICY_CHAIN_ID=421614 (Sepolia has no canonical
+  // RPC_URL_* row in doc 00); checked at relay construction.
+  RPC_URL_ARBITRUM_SEPOLIA: z.url().optional(),
   // PROPOSED (doc 06, spec-silent): doc 00 lists these six under the WORKER's
   // table; the web server also needs them for the dust scanner (sweep.preview /
   // sweep.execute re-scan). Same canonical names, never NEXT_PUBLIC_ — the

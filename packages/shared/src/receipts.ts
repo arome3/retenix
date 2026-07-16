@@ -158,3 +158,60 @@ export const revokedReceipt = (
  *  be in flight. */
 export const unresolvedReceipt = (usd: number, ticker: string): string =>
   `Still settling — your ${fmtUsd(usd)} ${ticker} buy hasn't confirmed yet. We're checking on it.`;
+
+// --- plan lifecycle receipts (module 10, PROPOSED copy — doc 10 seeds the
+// --- "hired"/"dismissed" sentences; agent voice, doc 01) ---
+
+const CADENCE_EVERY = {
+  daily: "every day",
+  weekly: "every week",
+  monthly: "every month",
+} as const;
+
+/** "SPYx, TSLAx and SOL" — receipt-grade list joining. */
+function tickerList(tickers: readonly string[]): string {
+  if (tickers.length <= 1) return tickers[0] ?? "";
+  return `${tickers.slice(0, -1).join(", ")} and ${tickers[tickers.length - 1]}`;
+}
+
+/** Activation receipt (doc 10 step 4, PROPOSED): "Your Broker is hired — …". */
+export function brokerHiredReceipt(e: {
+  amountUsd: number;
+  cadence: keyof typeof CADENCE_EVERY;
+  tickers: readonly string[];
+}): string {
+  return `Your Broker is hired — ${fmtUsd(e.amountUsd)} ${CADENCE_EVERY[e.cadence]} across ${tickerList(e.tickers)}.`;
+}
+
+/** Guardian activation receipt (PROPOSED, same register). */
+export function guardianHiredReceipt(e: {
+  weeklyCapUsd?: number;
+  maxDrawdownPct?: number;
+}): string {
+  const clauses: string[] = [];
+  if (e.weeklyCapUsd !== undefined) {
+    clauses.push(`never more than ${fmtUsd(e.weeklyCapUsd)} a week`);
+  }
+  if (e.maxDrawdownPct !== undefined) {
+    clauses.push(`stops everything at ${e.maxDrawdownPct}% down`);
+  }
+  return `Your Guardian is on duty — ${clauses.join(" · ")}.`;
+}
+
+const AGENT_TITLE = {
+  broker: "Broker",
+  guardian: "Guardian",
+  legacy: "Continuity plan",
+} as const;
+
+/** Revoke receipt (doc 10, seeded copy: "…it can no longer act."). */
+export const planDismissedReceipt = (
+  kind: keyof typeof AGENT_TITLE,
+): string => `Your ${AGENT_TITLE[kind]} was dismissed — it can no longer act.`;
+
+/** Pause/resume receipts (PROPOSED). Pause is an operational stop (the worker
+ *  stops scheduling); revoke is the onchain kill — the copy keeps them apart. */
+export const planPausedReceipt = (kind: keyof typeof AGENT_TITLE): string =>
+  `Your ${AGENT_TITLE[kind]} is paused — nothing runs until you resume it.`;
+export const planResumedReceipt = (kind: keyof typeof AGENT_TITLE): string =>
+  `Your ${AGENT_TITLE[kind]} is back on duty.`;

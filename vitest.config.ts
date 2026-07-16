@@ -19,6 +19,12 @@ const webTestEnv = {
   NEXT_PUBLIC_PARTICLE_APP_UUID: "00000000-0000-0000-0000-000000000000",
   ANTHROPIC_API_KEY: "sk-ant-test",
   SESSION_SECRET: "session-secret-test",
+  // doc 10: plan relay — the well-known anvil dev key #0 (a public test
+  // constant, not a credential); route tests mock the relay itself.
+  RELAYER_PRIVATE_KEY:
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+  POLICY_CHAIN_ID: "421614",
+  RPC_URL_ARBITRUM_SEPOLIA: "https://sepolia-rollup.arbitrum.io/rpc",
   APP_BASE_URL: "http://localhost:3000",
   NEXT_PUBLIC_SENTRY_DSN: "https://x.ingest.sentry.io/0",
   SENTRY_AUTH_TOKEN: "sntrys_test",
