@@ -1,62 +1,36 @@
 import type { Metadata } from "next";
-import { ShieldOff } from "lucide-react";
-import {
-  BrokerAvatar,
-  ContinuityAvatar,
-  GuardianAvatar,
-} from "@/components/avatars";
 import { BuyingPowerHeader } from "@/components/BuyingPowerHeader";
+import { KillSwitchSlot } from "@/components/KillSwitchSlot";
+import { PortfolioSection } from "@/components/PortfolioSection";
 import { SweepPromptCard } from "@/components/SweepPromptCard";
-import { Button } from "@/components/ui/button";
 import { requireSession } from "@/server/require-session";
 
 export const metadata: Metadata = { title: "Home" };
 
-// S2 Home (DS §8): C1 header + kill-switch entry · sweep prompt card ·
-// portfolio chart (C11) + holdings (C10). Modules 06/12/13 own those pieces;
-// this shell fixes the composition and the empty states so the screen is a
-// designed surface before they land — never a blank page.
+// S2 Home (doc 12, DS §8) — assembly order is spec-fixed: C1 header +
+// kill-switch slot (doc 13 registers the surface; the slot renders here) →
+// dust-sweep prompt (doc 06's card, first session) → C11 chart → C9 ring →
+// C10 holdings (PortfolioSection) → mini-feed. One screen answers: what am
+// I worth, how has it moved, what do I hold, what did it cost me, what's my
+// mix — with zero chain vocabulary (G12/G3: Home never names networks).
 export default async function HomePage() {
-  // The layout already gates; this read hands the client flow its EOA (the
-  // sweep runner signs with the session's own key — no client-side guessing).
+  // The layout already gates; this read hands the sweep runner its EOA (it
+  // signs with the session's own key — no client-side guessing).
   const session = await requireSession();
   return (
     <div className="space-y-8 py-6">
       <header className="flex items-start justify-between gap-4">
         <BuyingPowerHeader />
-        {/* TODO(doc 13): C7 arms this — the hold-to-liquidate surface. */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled
-          aria-label="Kill switch (not available yet)"
-        >
-          <ShieldOff strokeWidth={1.5} aria-hidden="true" />
-        </Button>
+        <KillSwitchSlot />
       </header>
 
       <SweepPromptCard eoa={session.eoa} />
 
-      <section aria-labelledby="portfolio-heading" className="space-y-3">
+      <section aria-labelledby="portfolio-heading" className="space-y-4">
         <h2 id="portfolio-heading" className="font-display text-h1">
           Portfolio
         </h2>
-        {/* TODO(doc 12): C11 chart + C10 holdings replace this empty state. */}
-        <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-6 shadow-soft">
-          <div className="flex -space-x-1.5" aria-hidden="true">
-            <BrokerAvatar size={28} />
-            <GuardianAvatar size={28} />
-            <ContinuityAvatar size={28} />
-          </div>
-          <div className="space-y-1">
-            <p className="text-body">Nothing is invested yet.</p>
-            <p className="text-small text-muted-foreground">
-              Your staff is hired. When they start working, everything they
-              hold — and the reason for every move — appears here.
-            </p>
-          </div>
-        </div>
+        <PortfolioSection />
       </section>
     </div>
   );
