@@ -171,6 +171,18 @@ function eventToRow(row: EventRow): MergedRow {
     const legs = sweepLegsToDetail(payload);
     if (legs.length > 0) detail.legs = legs;
   }
+  if (row.type === "sell.receipt") {
+    // doc 12's sell rows: server-verified fees + the guarded onchain link
+    // (same passthrough-only discipline — stored strings never re-authored).
+    const fees = feeTotalsSchema.safeParse(payload?.fees);
+    if (fees.success) detail.fees = fees.data;
+    if (
+      typeof payload?.transactionId === "string" &&
+      isUaTxIdFormat(payload.transactionId)
+    ) {
+      detail.uaTxId = payload.transactionId;
+    }
+  }
   return {
     id: row.id,
     createdAt: row.createdAt,

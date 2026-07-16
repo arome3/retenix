@@ -1,10 +1,20 @@
 import { events, portfolioSnapshots, users } from "@retenix/db";
+import { REGISTRY } from "@retenix/registry";
 import {
+  acceptableAddresses,
   bucketSnapshots,
   CHART_RANGES,
+  extractSellFill,
   RANGE_CONFIG,
+  networkName,
+  SELL_RECEIPT_EVENT,
+  sellRecordPayloadSchema,
+  sellReceiptText,
+  withSig,
   type ChartPoint,
+  type FeeTotals,
 } from "@retenix/shared";
+import { parseFeeTotals, pollToTerminal } from "@retenix/ua";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -12,9 +22,11 @@ import {
   computeHoldings,
   defaultHoldingsDeps,
   holdingsCache,
+  sellEnabled,
   type HoldingsResponse,
 } from "../lib/holdings";
-import { gatedProcedure, router } from "../trpc";
+import { serverUa } from "../lib/ua";
+import { gatedProcedure, gatedSignedProcedure, router } from "../trpc";
 
 export const portfolioRouter = router({
   // The brokerage statement (doc 12, TS-13.1). Composes off gatedProcedure —
@@ -131,4 +143,127 @@ export const portfolioRouter = router({
       };
     },
   ),
+
+  // Sell-from-detail report (doc 12, PROPOSED — sell-all only, behind the
+  // flag). Single-phase where sweep is two-phase, deliberately: the user
+  // picks ONE asset explicitly and their Magic signature over the UA root
+  // hash is the money authorization; the server's job here is verification
+  // and the exactly-once receipt. Everything ledgered is re-derived from the
+  // server's own poll (outcome, owners, qty, usd, fees) — the client's only
+  // claims are which asset and which transactionId. Signature-gated per
+  // doc 00 (gate first so a FORBIDDEN never burns a nonce).
+  recordSell: gatedSignedProcedure
+    .input(withSig(sellRecordPayloadSchema))
+    .mutation(async ({ ctx, input }) => {
+      if (!sellEnabled()) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "selling is not enabled",
+        });
+      }
+      const payload = sellRecordPayloadSchema.parse(input.payload);
+      const { userId, eoaAddr } = ctx.session;
+
+      const asset = REGISTRY.find((a) => a.id === payload.assetId);
+      if (!asset) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "unknown asset" });
+      }
+
+      // Server-side verification (sweep report mechanics): poll to terminal,
+      // then check the payload's owner fields against this session's account.
+      let polled: { outcome: string; t: Record<string, unknown> };
+      try {
+        polled = await pollToTerminal(serverUa(eoaAddr), payload.transactionId, {
+          intervalMs: 1500,
+          timeoutMs: 6000,
+        });
+      } catch {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "couldn't verify the sale yet — your holdings will reflect it once it settles",
+        });
+      }
+      if (polled.outcome !== "finished") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            polled.outcome === "refunded"
+              ? "the sale didn't complete — everything stayed put"
+              : "the sale is still settling — check back shortly",
+        });
+      }
+
+      const [userRow] = await ctx.db
+        .select({ uaSolAddr: users.uaSolAddr })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const owners = extractOwners(polled.t).map((o) => o.toLowerCase());
+      const mine = [eoaAddr, userRow?.uaSolAddr ?? ""]
+        .filter(Boolean)
+        .map((o) => o.toLowerCase());
+      if (owners.length > 0 && !owners.some((o) => mine.includes(o))) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "that sale did not come from this account",
+        });
+      }
+
+      const fill = extractSellFill([polled.t], acceptableAddresses(asset));
+      let fees: FeeTotals | undefined;
+      try {
+        fees = parseFeeTotals(polled.t as { feeQuotes?: unknown[] });
+      } catch {
+        fees = undefined;
+      }
+
+      const receipt = {
+        assetId: asset.id,
+        qty: fill.qty,
+        usd: fill.usd,
+        outcome: "finished",
+        transactionId: payload.transactionId,
+        network: networkName(asset.chainId), // copy-canon-allow
+        receipt: sellReceiptText(asset.ticker),
+        ...(fees ? { fees } : {}),
+      };
+
+      // Exactly-once, serialized on the users row (the sweep-report shape):
+      // a retried or concurrent report converges on the first receipt.
+      const written = await ctx.db.transaction(async (tx) => {
+        await tx.execute(sql`select id from users where id = ${userId} for update`);
+        const existing = await tx
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.userId, userId),
+              eq(events.type, SELL_RECEIPT_EVENT),
+              sql`${events.payloadJson}->>'transactionId' = ${payload.transactionId}`,
+            ),
+          )
+          .limit(1);
+        if (existing.length > 0) return false;
+        await tx.insert(events).values({
+          userId,
+          type: SELL_RECEIPT_EVENT,
+          payloadJson: receipt,
+        });
+        return true;
+      });
+
+      holdingsCache.drop(userId);
+      return { recorded: written, receipt: receipt.receipt };
+    }),
 });
+
+/** Best-effort owner extraction from the (unfrozen, doc 03 OQ5) polled
+ *  payload — the sweep verifier's exact rule. */
+function extractOwners(t: Record<string, unknown>): string[] {
+  const owners: string[] = [];
+  const sao = t.smartAccountOptions as { ownerAddress?: unknown } | undefined;
+  if (typeof sao?.ownerAddress === "string") owners.push(sao.ownerAddress);
+  if (typeof t.sender === "string" && t.sender) owners.push(t.sender);
+  return owners;
+}

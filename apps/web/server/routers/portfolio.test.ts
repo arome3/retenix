@@ -1,6 +1,14 @@
 import { events, executions, getDb, jobs, plans, portfolioSnapshots, users } from "@retenix/db";
-import { SOL_NATIVE_MINT } from "@retenix/shared";
+import {
+  buildSignedMessage,
+  computeInputHash,
+  SOL_NATIVE_MINT,
+  type SellRecordPayload,
+  type SigEnvelope,
+} from "@retenix/shared";
+import { pollToTerminal } from "@retenix/ua";
 import { eq, sql } from "drizzle-orm";
+import { Wallet } from "ethers";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Context } from "../context";
 import type { HoldingsDeps } from "../lib/holdings";
@@ -10,15 +18,31 @@ import type { HoldingsDeps } from "../lib/holdings";
  * (Solana RPC + Jupiter fetch via the injected HoldingsDeps — the sweep-route
  * test's seam pattern). Seeds the same rows the worker writes: plans → jobs
  * (numeric-seq period keys) → finished executions carrying quote_json.fill.
+ * recordSell mocks the UA layer and signs real envelopes with an ethers
+ * Wallet standing in for Magic (sweep.test.ts precedent).
  */
 
 vi.mock("../lib/holdings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/holdings")>();
-  return { ...actual, defaultHoldingsDeps: vi.fn() };
+  return {
+    ...actual,
+    defaultHoldingsDeps: vi.fn(),
+    sellEnabled: vi.fn(() => true),
+  };
+});
+vi.mock("@retenix/ua", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@retenix/ua")>();
+  return {
+    ...actual,
+    createUa: vi.fn(() => ({}) as never),
+    pollToTerminal: vi.fn(),
+  };
 });
 
 const holdingsLib = await import("../lib/holdings");
 const depsMock = vi.mocked(holdingsLib.defaultHoldingsDeps);
+const sellEnabledMock = vi.mocked(holdingsLib.sellEnabled);
+const pollMock = vi.mocked(pollToTerminal);
 const { holdingsCache } = holdingsLib;
 const { appRouter } = await import("./index");
 
@@ -27,12 +51,13 @@ const EMAIL_HASH = "0xportfolio-route-test-emailhash";
 const SPYX_MINT = "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W";
 const UA_SOL = "7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7";
 const NOW = new Date("2026-07-16T12:00:00.000Z");
+const wallet = Wallet.createRandom();
 
 let userId: string;
 
 const ctx = (region = "DE"): Context => ({
   db,
-  session: { userId, eoaAddr: "0xE0A0000000000000000000000000000000000012", issuer: "did:test", region },
+  session: { userId, eoaAddr: wallet.address, issuer: "did:test", region },
   headers: new Headers(),
   resHeaders: new Headers(),
 });
@@ -99,8 +124,8 @@ async function seedUser(region = "DE"): Promise<void> {
     .insert(users)
     .values({
       emailHash: EMAIL_HASH,
-      eoaAddr: "0xE0A0000000000000000000000000000000000012",
-      uaEvmAddr: "0xE0A0000000000000000000000000000000000012",
+      eoaAddr: wallet.address,
+      uaEvmAddr: wallet.address,
       uaSolAddr: UA_SOL,
       region,
     })
@@ -424,6 +449,116 @@ describe("portfolio.holdings", () => {
     expect(res.holdings).toEqual([]);
     expect(res.totalUsd).toBe(0);
     expect(res.returnUsd).toBeNull();
+  });
+});
+
+describe("portfolio.recordSell", () => {
+  // Nonces must be strictly increasing per user (trpc.ts consumeNonce).
+  let nonceCounter = Date.now();
+  const nextNonce = () => ++nonceCounter;
+
+  async function sign(payload: SellRecordPayload): Promise<SigEnvelope> {
+    const nonce = nextNonce();
+    const expiry = Math.floor(Date.now() / 1000) + 240;
+    const message = buildSignedMessage({
+      route: "portfolio.recordSell",
+      inputHash: computeInputHash(payload),
+      nonce,
+      expiry,
+    });
+    return { signature: await wallet.signMessage(message), nonce, expiry };
+  }
+
+  async function recordSell(payload: SellRecordPayload) {
+    return appRouter
+      .createCaller(ctx())
+      .portfolio.recordSell({ payload, sig: await sign(payload) });
+  }
+
+  const finishedSell = (over: Record<string, unknown> = {}) =>
+    ({
+      outcome: "finished" as const,
+      t: {
+        status: 7,
+        smartAccountOptions: { ownerAddress: wallet.address },
+        tokenChanges: {
+          decr: [
+            {
+              token: { address: SPYX_MINT },
+              amount: "0.05",
+              amountInUSD: "31.00",
+            },
+          ],
+        },
+        feeQuotes: [],
+        ...over,
+      },
+    }) as never;
+
+  it("verifies server-side, writes exactly one sell.receipt, and converges on retry", async () => {
+    pollMock.mockResolvedValue(finishedSell());
+
+    const first = await recordSell({ assetId: "spyx", transactionId: "UA-SELL-1" });
+    expect(first).toEqual({
+      recorded: true,
+      receipt: "Sold SPYx — proceeds added to your buying power.",
+    });
+
+    const second = await recordSell({ assetId: "spyx", transactionId: "UA-SELL-1" });
+    expect(second.recorded).toBe(false); // converged, nothing double-written
+
+    const rows = await db
+      .select()
+      .from(events)
+      .where(eq(events.userId, userId));
+    const sells = rows.filter((r) => r.type === "sell.receipt");
+    expect(sells).toHaveLength(1);
+    expect(sells[0].payloadJson).toMatchObject({
+      assetId: "spyx",
+      qty: 0.05,
+      usd: 31,
+      outcome: "finished",
+      transactionId: "UA-SELL-1",
+      receipt: "Sold SPYx — proceeds added to your buying power.",
+    });
+  });
+
+  it("a sale from someone else's account is refused — no receipt", async () => {
+    pollMock.mockResolvedValue(
+      finishedSell({
+        smartAccountOptions: { ownerAddress: "0x000000000000000000000000000000000000dEaD" },
+        sender: "0x000000000000000000000000000000000000dEaD",
+      }),
+    );
+    await expect(
+      recordSell({ assetId: "spyx", transactionId: "UA-SELL-2" }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    const rows = await db.select().from(events).where(eq(events.userId, userId));
+    expect(rows.filter((r) => r.type === "sell.receipt")).toHaveLength(0);
+  });
+
+  it("refunded and unverifiable outcomes never produce a receipt", async () => {
+    pollMock.mockResolvedValue({ outcome: "refunded", t: { status: 9 } } as never);
+    await expect(
+      recordSell({ assetId: "spyx", transactionId: "UA-SELL-3" }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    pollMock.mockRejectedValue(new Error("lookup failed"));
+    await expect(
+      recordSell({ assetId: "spyx", transactionId: "UA-SELL-4" }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("unknown assets are BAD_REQUEST; the flag gates the whole mutation", async () => {
+    pollMock.mockResolvedValue(finishedSell());
+    await expect(
+      recordSell({ assetId: "memecoin", transactionId: "UA-SELL-5" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    sellEnabledMock.mockReturnValueOnce(false);
+    await expect(
+      recordSell({ assetId: "spyx", transactionId: "UA-SELL-6" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 

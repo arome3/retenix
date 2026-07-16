@@ -36,7 +36,7 @@ export default async function HomePage() {
         <h2 id="portfolio-heading" className="font-display text-h1">
           Portfolio
         </h2>
-        <PortfolioSection />
+        <PortfolioSection eoa={session.eoa} />
       </section>
 
       <MiniFeed />

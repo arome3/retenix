@@ -13,6 +13,7 @@ import {
 } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Num } from "@/components/Num";
+import { SellAction } from "@/components/SellAction";
 import { fmtUsd } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { ringSegments, type ChartRange } from "@retenix/shared";
@@ -23,7 +24,7 @@ import { ringSegments, type ChartRange } from "@retenix/shared";
 // Ring placement between chart and list is PROPOSED (the spec's assembly
 // line omits C9; its DoD reads "chart + ring + holdings").
 
-export function PortfolioSection() {
+export function PortfolioSection({ eoa }: { eoa: string }) {
   const holdings = trpc.portfolio.holdings.useQuery(undefined, {
     retry: false,
     staleTime: 30_000,
@@ -122,6 +123,9 @@ export function PortfolioSection() {
         onOpenChange={(open) => {
           if (!open) setOpenAssetId(null);
         }}
+        sellAction={
+          openHolding ? <SellAction holding={openHolding} eoa={eoa} /> : null
+        }
       />
     </div>
   );

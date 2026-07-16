@@ -62,6 +62,13 @@ export function marksSource(): MarksSource {
   return clientEnv.NEXT_PUBLIC_PORTFOLIO_LIVE === "1" ? "jupiter" : "last-trade";
 }
 
+/** Same flag, sell half (the doc puts both PROPOSED features behind ONE
+ *  flag): the Sell action renders and portfolio.recordSell accepts only
+ *  when it is on. */
+export function sellEnabled(): boolean {
+  return clientEnv.NEXT_PUBLIC_PORTFOLIO_LIVE === "1";
+}
+
 // ---------------------------------------------------------------------------
 // Fills — buys from executions, sells from events (shared mappers)
 // ---------------------------------------------------------------------------
@@ -252,6 +259,10 @@ export const holdingsCache = {
   },
   set(userId: string, response: HoldingsResponse): void {
     cache.set(userId, response);
+  },
+  /** After a sell lands, the user's next read must recompute. */
+  drop(userId: string): void {
+    cache.delete(userId);
   },
   clear(): void {
     cache.clear();

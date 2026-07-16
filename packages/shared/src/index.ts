@@ -14,3 +14,4 @@ export * from "./feed";
 export * from "./portfolio";
 export * from "./portfolio-fills";
 export * from "./marks";
+export * from "./sell";

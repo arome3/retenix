@@ -76,13 +76,15 @@ export function executionVariant(status: ExecutionStatus): FeedVariant | null {
 // ---------------------------------------------------------------------------
 
 /** kill.leg / estate.checkin are forward contracts for modules 13/14: their
- *  payloads must carry a display-ready `receipt` string (HANDOFF note). */
+ *  payloads must carry a display-ready `receipt` string (HANDOFF note).
+ *  sell.receipt is doc 12's flag-gated sell-from-detail (same rule). */
 export const FEED_EVENT_TYPES = [
   "plan.activated",
   "plan.revoked",
   "plan.paused",
   "plan.resumed",
   "sweep.receipt",
+  "sell.receipt",
   "kill.leg",
   "estate.checkin",
 ] as const;

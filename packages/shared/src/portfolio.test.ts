@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   acceptableAddresses,
   assembleHoldings,
+  extractSellFill,
   BASIS_QTY_TOLERANCE,
   bucketSnapshots,
   buildBasisLedger,
@@ -160,6 +161,31 @@ describe("extractFillQty", () => {
       };
       expect(extractFillQty([detail], accept)).toBeNull();
     }
+  });
+});
+
+describe("extractSellFill", () => {
+  const accept = acceptableAddresses(ASSETS[0]);
+
+  it("reads the sold side (decr) with its verified USD", () => {
+    const detail = {
+      tokenChanges: {
+        decr: [
+          { token: { address: SPYX_MINT }, amount: "0.05", amountInUSD: "31.00" },
+        ],
+      },
+    };
+    expect(extractSellFill([detail], accept)).toEqual({ qty: 0.05, usd: 31 });
+  });
+
+  it("falls back to swaps[].fromToken; unknowable stays null", () => {
+    const swapped = {
+      tokenChanges: {
+        swaps: [{ fromToken: { token: { address: SPYX_MINT }, amount: "0.02" } }],
+      },
+    };
+    expect(extractSellFill([swapped], accept)).toEqual({ qty: 0.02, usd: null });
+    expect(extractSellFill([{}], accept)).toEqual({ qty: null, usd: null });
   });
 });
 

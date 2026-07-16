@@ -146,6 +146,17 @@ function matchesAddress(candidate: string, accept: readonly string[]): boolean {
 interface TokenAmountLike {
   token?: { address?: unknown };
   amount?: unknown;
+  amountInUSD?: unknown;
+}
+
+function positiveNumber(value: unknown): number | null {
+  const n =
+    typeof value === "string"
+      ? Number(value)
+      : typeof value === "number"
+        ? value
+        : Number.NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function qtyFromEntry(
@@ -159,13 +170,7 @@ function qtyFromEntry(
   // ITokenWithUSD.amount is a human-unit decimal string (SDK 2.0.3 typings);
   // shape is OQ5-unfrozen, so anything non-finite or non-positive is treated
   // as unknowable rather than guessed at.
-  const qty =
-    typeof entry.amount === "string"
-      ? Number(entry.amount)
-      : typeof entry.amount === "number"
-        ? entry.amount
-        : Number.NaN;
-  return Number.isFinite(qty) && qty > 0 ? qty : null;
+  return positiveNumber(entry.amount);
 }
 
 /**
@@ -179,25 +184,50 @@ export function extractFillQty(
   payloads: readonly unknown[],
   accept: readonly string[],
 ): number | null {
+  return extractTokenChange(payloads, accept, "in")?.qty ?? null;
+}
+
+/**
+ * The SELL counterpart: what left the account (`tokenChanges.decr` /
+ * `swaps[].fromToken`) plus its verified USD when the payload states one.
+ * Same tolerance rules — unknowable is null, never a guess.
+ */
+export function extractSellFill(
+  payloads: readonly unknown[],
+  accept: readonly string[],
+): { qty: number | null; usd: number | null } {
+  const hit = extractTokenChange(payloads, accept, "out");
+  return { qty: hit?.qty ?? null, usd: hit?.usd ?? null };
+}
+
+function extractTokenChange(
+  payloads: readonly unknown[],
+  accept: readonly string[],
+  direction: "in" | "out",
+): { qty: number; usd: number | null } | null {
+  const listKey = direction === "in" ? "incr" : "decr";
+  const swapKey = direction === "in" ? "toToken" : "fromToken";
   for (const payload of payloads) {
     if (payload === null || typeof payload !== "object") continue;
     const changes = (payload as { tokenChanges?: unknown }).tokenChanges;
     if (changes === null || typeof changes !== "object") continue;
 
-    const incr = (changes as { incr?: unknown }).incr;
-    if (Array.isArray(incr)) {
-      for (const entry of incr) {
-        const qty = qtyFromEntry(entry as TokenAmountLike, accept);
-        if (qty !== null) return qty;
-      }
-    }
+    const entries: TokenAmountLike[] = [];
+    const list = (changes as Record<string, unknown>)[listKey];
+    if (Array.isArray(list)) entries.push(...(list as TokenAmountLike[]));
     const swaps = (changes as { swaps?: unknown }).swaps;
     if (Array.isArray(swaps)) {
       for (const swap of swaps) {
-        const to = (swap as { toToken?: TokenAmountLike }).toToken;
-        if (to === null || typeof to !== "object") continue;
-        const qty = qtyFromEntry(to, accept);
-        if (qty !== null) return qty;
+        const side = (swap as Record<string, unknown>)[swapKey];
+        if (side !== null && typeof side === "object") {
+          entries.push(side as TokenAmountLike);
+        }
+      }
+    }
+    for (const entry of entries) {
+      const qty = qtyFromEntry(entry, accept);
+      if (qty !== null) {
+        return { qty, usd: positiveNumber(entry.amountInUSD) };
       }
     }
   }
