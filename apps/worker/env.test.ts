@@ -25,6 +25,9 @@ const VALID: Record<string, string> = {
   SLACK_STATUS_WEBHOOK_URL: "https://hooks.slack.com/services/T0/B0/x",
   SENTRY_DSN: "https://x.ingest.sentry.io/0",
   INTERNAL_API_TOKEN: "internal-test-token",
+  // Pinned here because the vitest worker project injects DEMO_MODE=1 for
+  // executor/http tests; the default-value assertions below need it absent.
+  DEMO_MODE: "0",
 };
 
 async function importEnv(overrides: Record<string, string | undefined>) {
