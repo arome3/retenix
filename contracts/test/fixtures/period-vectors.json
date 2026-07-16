@@ -1,0 +1,16 @@
+{
+  "note": "Hand-authored rollover vectors (doc 08). Consumed by BOTH contracts/test/PeriodVectors.t.sol (the contract's lazy rollover in recordExecution) and packages/shared/src/period.test.ts (periodOf). Neither implementation generated these numbers — drift in either side goes red. anchor = plan creation timestamp (the contract sets periodStart = block.timestamp at createPlan).",
+  "count": 10,
+  "vectors": [
+    { "name": "now-equals-anchor", "anchor": 1700000000, "periodSecs": 1000, "now": 1700000000, "expectedPeriodStart": 1700000000 },
+    { "name": "within-last-second", "anchor": 1700000000, "periodSecs": 1000, "now": 1700000999, "expectedPeriodStart": 1700000000 },
+    { "name": "boundary-exact-rolls (spec >=)", "anchor": 1700000000, "periodSecs": 1000, "now": 1700001000, "expectedPeriodStart": 1700001000 },
+    { "name": "one-past-boundary", "anchor": 1700000000, "periodSecs": 1000, "now": 1700001001, "expectedPeriodStart": 1700001000 },
+    { "name": "multi-period-gap-phase-aligned", "anchor": 1700000000, "periodSecs": 1000, "now": 1700002500, "expectedPeriodStart": 1700002000 },
+    { "name": "exact-multi-boundary", "anchor": 1700000000, "periodSecs": 1000, "now": 1700003000, "expectedPeriodStart": 1700003000 },
+    { "name": "one-second-period", "anchor": 1700000000, "periodSecs": 1, "now": 1700000007, "expectedPeriodStart": 1700000007 },
+    { "name": "daily-window", "anchor": 1700000000, "periodSecs": 86400, "now": 1700090000, "expectedPeriodStart": 1700086400 },
+    { "name": "weekly-three-periods-in", "anchor": 1700000000, "periodSecs": 604800, "now": 1701826745, "expectedPeriodStart": 1701814400 },
+    { "name": "uint32-max-period-no-overflow", "anchor": 1700000000, "periodSecs": 4294967295, "now": 1731536000, "expectedPeriodStart": 1700000000 }
+  ]
+}
