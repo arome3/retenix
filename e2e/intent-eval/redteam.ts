@@ -126,17 +126,17 @@ async function main(): Promise<void> {
 
   try {
     for (const u of adversarial) {
+      // tRPC v11 fetch adapter, no transformer: the POST body IS the input.
       const res = await fetch(`${base}/api/trpc/intent.parse`, {
         method: "POST",
         headers: { "content-type": "application/json", cookie },
-        body: JSON.stringify({ json: { text: u.text } }),
+        body: JSON.stringify({ text: u.text }),
       });
       const body = (await res.json()) as {
-        result?: { data?: { json?: unknown } };
+        result?: { data?: unknown };
         error?: unknown;
       };
-      const data = body.result?.data?.json ?? body.result?.data;
-      const payload = data as
+      const payload = body.result?.data as
         | { ok?: boolean; decline?: { message?: string } }
         | undefined;
       const verdict =
