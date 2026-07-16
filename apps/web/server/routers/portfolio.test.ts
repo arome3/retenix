@@ -426,3 +426,50 @@ describe("portfolio.holdings", () => {
     expect(res.returnUsd).toBeNull();
   });
 });
+
+describe("portfolio.chart", () => {
+  const seedSnapshot = (iso: string, totalUsd: number) =>
+    db.insert(portfolioSnapshots).values({
+      userId,
+      totalUsd,
+      perAssetJson: {},
+      at: new Date(iso),
+    });
+
+  beforeEach(() => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-16T12:30:00.000Z"));
+    return () => vi.mocked(Date.now).mockRestore();
+  });
+
+  it("1w buckets hourly, last-per-bucket wins, worker gaps stay null", async () => {
+    await seedSnapshot("2026-07-16T10:05:00.000Z", 100);
+    await seedSnapshot("2026-07-16T10:55:00.000Z", 101);
+    await seedSnapshot("2026-07-16T12:05:00.000Z", 103);
+
+    const res = await caller().portfolio.chart({ range: "1w" });
+    expect(res.points).toEqual([
+      { t: Date.parse("2026-07-16T10:00:00.000Z") / 1000, usd: 101 },
+      { t: Date.parse("2026-07-16T11:00:00.000Z") / 1000, usd: null },
+      { t: Date.parse("2026-07-16T12:00:00.000Z") / 1000, usd: 103 },
+    ]);
+  });
+
+  it("range windows filter server-side; 'all' reaches the first snapshot", async () => {
+    await seedSnapshot("2026-05-01T00:00:00.000Z", 50); // > 1m ago
+    await seedSnapshot("2026-07-16T11:00:00.000Z", 100);
+
+    const oneMonth = await caller().portfolio.chart({ range: "1m" });
+    expect(oneMonth.points.some((p) => p.usd === 50)).toBe(false);
+
+    const all = await caller().portfolio.chart({ range: "all" });
+    expect(all.points[0].usd).toBe(50);
+    expect(all.points.at(-1)?.usd).toBe(100); // today's bucket holds 11:00
+    // The 2.5-month worker gap renders as null buckets, never interpolation.
+    expect(all.points.filter((p) => p.usd === null).length).toBeGreaterThan(60);
+  });
+
+  it("no snapshots → empty points (the chart renders its skeleton/empty state)", async () => {
+    const res = await caller().portfolio.chart({ range: "3m" });
+    expect(res.points).toEqual([]);
+  });
+});

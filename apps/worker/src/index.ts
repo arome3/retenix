@@ -18,6 +18,7 @@ import { getAgentSigner, type AgentSigner } from "./kms";
 import { captureError, initSentry } from "./notify";
 import { PolicyClient } from "./policy";
 import { rescueOrphans, scanDuePlans } from "./scheduler";
+import { snapshotTick } from "./snapshots";
 import { agentUaFor, executeLegForUser } from "./ua-exec";
 
 /**
@@ -153,6 +154,23 @@ async function main(): Promise<void> {
   };
   const scan = cron.schedule("* * * * *", () => void tick(), { noOverlap: true });
 
+  // Hourly portfolio snapshots (doc 12, PROPOSED) — display-only valuation
+  // rows for C11/C10. Plain cron body, no queue: a missed tick is an honest
+  // chart gap, never something to retry into existence after the fact.
+  const snapTick = async (): Promise<void> => {
+    try {
+      await snapshotTick({ db });
+    } catch (err) {
+      captureError(err, { source: "snapshot-cron" });
+    }
+  };
+  const snapshots = cron.schedule("0 * * * *", () => void snapTick(), {
+    noOverlap: true,
+  });
+  // Boot kick: dev/demo environments get chart points without waiting for
+  // the top of the hour (readiness must not wait on it — fire and forget).
+  void snapTick();
+
   const server = startHttp({ db, boss, demoMode });
 
   // Fire-and-forget; boot readiness must not wait on quote warming.
@@ -170,6 +188,7 @@ async function main(): Promise<void> {
       `[worker] ${signal} received — graceful shutdown (finish in-flight job, stop fetching)`,
     );
     scan.stop();
+    snapshots.stop();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     try {
       // Waits for the in-flight handler; a >60s poll is failed into pg-boss

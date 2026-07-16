@@ -466,9 +466,10 @@ export interface SnapshotAssetValue {
   stale?: boolean;
 }
 
-export type ChartRange = "1w" | "1m" | "3m" | "all";
+/** Tuple (not a widened array) so route schemas can z.enum(CHART_RANGES). */
+export const CHART_RANGES = ["1w", "1m", "3m", "all"] as const;
 
-export const CHART_RANGES: readonly ChartRange[] = ["1w", "1m", "3m", "all"];
+export type ChartRange = (typeof CHART_RANGES)[number];
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;

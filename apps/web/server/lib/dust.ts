@@ -1,5 +1,6 @@
 import {
   DUST_FLOOR_USD,
+  SOLANA_TOKEN_PROGRAMS,
   type FeeTotals,
   type SweepSkipReason,
 } from "@retenix/shared";
@@ -105,13 +106,9 @@ function evmSources(): EvmSource[] {
 
 const SOLANA_CHAIN_ID = 101;
 const SOLANA_PRICE_NETWORK = "solana-mainnet";
-// Classic SPL Token + Token-2022 — dust lives under both programs. Exported
-// for doc 12's holdings reader, which scans the SAME owner with the inverse
-// filter (registry mints only) — one program list, zero drift.
-export const SOLANA_TOKEN_PROGRAMS = [
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-];
+// Classic SPL Token + Token-2022: the program list moved to @retenix/shared
+// for doc 12 (holdings route + snapshot cron scan the SAME owner with the
+// inverse filter) — one list, zero drift. Imported at the top of this file.
 
 /** Tokens per source cap — a bound against pathological airdrop wallets, high
  *  enough that hitting it is reported rather than silently truncated. */

@@ -1,6 +1,13 @@
-import { users } from "@retenix/db";
+import { portfolioSnapshots, users } from "@retenix/db";
+import {
+  bucketSnapshots,
+  CHART_RANGES,
+  RANGE_CONFIG,
+  type ChartPoint,
+} from "@retenix/shared";
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gte } from "drizzle-orm";
+import { z } from "zod";
 import {
   computeHoldings,
   defaultHoldingsDeps,
@@ -51,4 +58,38 @@ export const portfolioRouter = router({
       }
     },
   ),
+
+  // C11's data: snapshots aggregated per range (doc 12 — "range switch
+  // re-queries snapshots"; helper query beyond §13's list, the modules-02/
+  // 06/10 precedent). Last snapshot per bucket, empty buckets stay null —
+  // the chart renders them as whitespace gaps, never an interpolation.
+  chart: gatedProcedure
+    .input(z.object({ range: z.enum(CHART_RANGES) }))
+    .query(
+      async ({
+        ctx,
+        input,
+      }): Promise<{ points: ChartPoint[]; asOf: string }> => {
+        const nowMs = Date.now();
+        const { spanMs } = RANGE_CONFIG[input.range];
+        const scope = eq(portfolioSnapshots.userId, ctx.session.userId);
+        const rows = await ctx.db
+          .select({ at: portfolioSnapshots.at, totalUsd: portfolioSnapshots.totalUsd })
+          .from(portfolioSnapshots)
+          .where(
+            spanMs === null
+              ? scope
+              : and(scope, gte(portfolioSnapshots.at, new Date(nowMs - spanMs))),
+          )
+          .orderBy(asc(portfolioSnapshots.at));
+        return {
+          points: bucketSnapshots(
+            rows.map((r) => ({ at: r.at.toISOString(), totalUsd: r.totalUsd })),
+            input.range,
+            nowMs,
+          ),
+          asOf: new Date(nowMs).toISOString(),
+        };
+      },
+    ),
 });

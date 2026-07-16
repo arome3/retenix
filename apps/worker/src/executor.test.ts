@@ -8,6 +8,7 @@ import {
   getPool,
   jobs,
   plans,
+  portfolioSnapshots,
   users,
   type Db,
 } from "@retenix/db";
@@ -228,6 +229,11 @@ describe.skipIf(!url)("executor (db-backed state machine)", () => {
       await db.delete(events).where(eq(events.userId, userId));
       await db.delete(plans).where(inArray(plans.id, planIds));
     }
+    // FK order: doc 12's snapshots reference users (a snapshot tick over this
+    // user must never wedge the teardown).
+    await db
+      .delete(portfolioSnapshots)
+      .where(eq(portfolioSnapshots.userId, userId));
     await db.delete(users).where(eq(users.id, userId));
     await getPool().end();
   });

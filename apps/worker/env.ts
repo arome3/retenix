@@ -45,6 +45,10 @@ const schema = z.object({
   // executeLegForUser corrupts the root signature so the UA rejects the send
   // server-side — the honest failure ladder runs without moving funds.
   FAULT_INJECT_UA: z.enum(["corrupt-root-sig"]).optional(),
+  // PROPOSED (doc 12): the snapshot cron's display-marks source — the worker
+  // mirror of the web's NEXT_PUBLIC_PORTFOLIO_LIVE marks half (separate
+  // process env; set the two together so the statement and its history agree).
+  PORTFOLIO_MARKS: z.enum(["jupiter", "last-trade"]).default("jupiter"),
 });
 
 const parsed = schema.safeParse(process.env);

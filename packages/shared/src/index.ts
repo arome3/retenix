@@ -12,4 +12,5 @@ export * from "./basket";
 export * from "./plans";
 export * from "./feed";
 export * from "./portfolio";
+export * from "./portfolio-fills";
 export * from "./marks";
