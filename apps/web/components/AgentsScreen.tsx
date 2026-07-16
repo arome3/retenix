@@ -70,6 +70,36 @@ export function AgentsScreen({ eoa }: { eoa: string }) {
     await refresh();
   }
 
+  // Active-card edit = revoke-and-recreate under one confirmation (doc 10
+  // task 8): the owner signs both the revoke (nonce N) and the new createPlan
+  // (nonce N+1); two receipts, one action.
+  async function recreate(card: Card, amountUsd: number) {
+    const params = card.params as {
+      cadence: "daily" | "weekly" | "monthly";
+      basket: { assetId: string; pct: number }[];
+    };
+    const editedBroker = { cadence: params.cadence, amountUsd, basket: params.basket };
+    const prep = await trpcVanilla.plans.prepareRecreate.query({
+      planId: card.planId,
+      edits: { broker: editedBroker },
+    });
+    const revokeAuth = {
+      nonce: prep.revoke.nonce,
+      signature: await personalSign(prep.revoke.digest, eoa),
+    };
+    const createPlanAuth = {
+      nonce: prep.createPlan.nonce,
+      signature: await personalSign(prep.createPlan.digest, eoa),
+    };
+    const envelope = await signEnvelope(
+      "plans.recreate",
+      { planId: card.planId, edits: { broker: editedBroker }, revokeAuth, createPlanAuth },
+      eoa,
+    );
+    await trpcVanilla.plans.recreate.mutate(envelope);
+    await refresh();
+  }
+
   async function doRevoke(card: Card) {
     setBusy(true);
     setError(null);
@@ -135,6 +165,11 @@ export function AgentsScreen({ eoa }: { eoa: string }) {
                   onPause={() => pauseResume(card, "pause")}
                   onResume={() => pauseResume(card, "resume")}
                   onRevoke={() => setRevoking(card)}
+                  onEditAmount={
+                    card.kind === "broker" && card.status === "active"
+                      ? (amt) => recreate(card, amt)
+                      : undefined
+                  }
                 />
               ))
             )}
@@ -168,13 +203,22 @@ function RosterCard({
   onPause,
   onResume,
   onRevoke,
+  onEditAmount,
 }: {
   card: Card;
   state: PolicyCardState;
   onPause: () => void;
   onResume: () => void;
   onRevoke: () => void;
+  /** Active broker only: revoke-and-recreate at a new amount. */
+  onEditAmount?: (amountUsd: number) => Promise<void>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(() =>
+    Number((card.params as { amountUsd?: number }).amountUsd ?? 0),
+  );
+  const [busy, setBusy] = useState(false);
+
   const terms =
     card.kind === "broker"
       ? brokerTerms(card.params as unknown as BrokerSection, {
@@ -196,6 +240,54 @@ function RosterCard({
       onPause={onPause}
       onResume={onResume}
       onRevoke={onRevoke}
-    />
+      onEdit={onEditAmount ? () => setEditing((v) => !v) : undefined}
+    >
+      {onEditAmount && editing && (
+        <div className="flex flex-col gap-2 rounded-md bg-muted/40 p-2">
+          <label className="flex items-center gap-2 text-small text-muted-foreground">
+            Amount each run
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              step={1}
+              value={amount}
+              aria-label="Amount each run"
+              onChange={(e) => setAmount(Math.max(1, Math.min(1000, Number(e.target.value) || 0)))}
+              className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-foreground tnum"
+            />
+          </label>
+          <p className="text-caption text-muted-foreground">
+            Saving cancels this plan and starts a fresh one at the new amount —
+            you&apos;ll see two receipts.
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await onEditAmount(amount);
+                  setEditing(false);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="min-h-6 text-small text-agent"
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="min-h-6 text-small text-muted-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </PolicyCard>
   );
 }

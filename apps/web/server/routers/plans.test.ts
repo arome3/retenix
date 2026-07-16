@@ -424,6 +424,118 @@ describe("plans.revoke / pause / resume / setAutonomy", () => {
   });
 });
 
+describe("plans.recreate (active-card edit = revoke-and-recreate)", () => {
+  // The stub returns planId 42 for the first create and a distinct id for the
+  // recreate so we can tell the new plan apart. The override still counts into
+  // the base stub's `calls.create` (it's the same closure).
+  function recreateStub() {
+    const relay = stubRelay();
+    let created = 0;
+    relay.createPlan = async () => {
+      created += 1;
+      relay.calls.create += 1;
+      return { txHash: "0xtx", planId: created === 1 ? 42n : 99n };
+    };
+    return relay;
+  }
+
+  it("revokes the old plan and creates the edited one; two receipts, one new active card", async () => {
+    const relay = recreateStub();
+    setPlanRelayFactory(() => relay);
+    const user = await makeSignerUser();
+    // Activate a $25 broker + guardian.
+    const draftId = await seedDraft(user.userId, brokerDraft);
+    const cards = (
+      await appRouter.createCaller(ctxFor(user)).plans.activate(
+        await signedInput(
+          "plans.activate",
+          { draftId, accept: { broker: true, guardian: true, legacy: false }, createPlanAuth: auth() },
+          user.wallet,
+        ),
+      )
+    ).cards;
+    const broker = cards.find((c) => c.kind === "broker")!;
+
+    // Edit the amount to $30 → revoke old (42) + create new (99).
+    const editedBroker = { ...brokerDraft.broker, amountUsd: 30 };
+    const res = await appRouter.createCaller(ctxFor(user)).plans.recreate(
+      await signedInput(
+        "plans.recreate",
+        {
+          planId: broker.planId,
+          edits: { broker: editedBroker },
+          revokeAuth: auth("1"),
+          createPlanAuth: auth("2"),
+        },
+        user.wallet,
+      ),
+    );
+    expect(relay.calls.revoke).toBe(1);
+    expect(relay.calls.create).toBe(2);
+    expect(res.card.contractPlanId).toBe(99);
+
+    const rows = await plansOf(user.userId);
+    // Old broker+guardian revoked; new broker (+carried guardian) active at 99.
+    const active = rows.filter((r) => r.status === "active");
+    expect(active.every((r) => r.contractPlanId === 99)).toBe(true);
+    const newBroker = active.find((r) => r.kind === "broker");
+    expect((newBroker?.paramsJson as { amountUsd: number }).amountUsd).toBe(30);
+    // The carried-forward guardian is present on the new plan.
+    expect(active.some((r) => r.kind === "guardian")).toBe(true);
+
+    // Two honest receipts (dismissed + hired).
+    const dismissed = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.userId, user.userId), eq(events.type, "plan.revoked")));
+    expect(dismissed.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("marks the old plan revoked if the recreate's create leg fails after revoke", async () => {
+    let created = 0;
+    setPlanRelayFactory(() =>
+      stubRelay({
+        createPlan: async () => {
+          created += 1;
+          if (created === 2) throw new Error("create leg down");
+          return { txHash: "0xtx", planId: 42n };
+        },
+      }),
+    );
+    const user = await makeSignerUser();
+    const draftId = await seedDraft(user.userId, brokerDraft);
+    const cards = (
+      await appRouter.createCaller(ctxFor(user)).plans.activate(
+        await signedInput(
+          "plans.activate",
+          { draftId, accept: { broker: true, guardian: false, legacy: false }, createPlanAuth: auth() },
+          user.wallet,
+        ),
+      )
+    ).cards;
+    const broker = cards.find((c) => c.kind === "broker")!;
+
+    await expect(
+      appRouter.createCaller(ctxFor(user)).plans.recreate(
+        await signedInput(
+          "plans.recreate",
+          {
+            planId: broker.planId,
+            edits: { broker: { ...brokerDraft.broker, amountUsd: 30 } },
+            revokeAuth: auth("1"),
+            createPlanAuth: auth("2"),
+          },
+          user.wallet,
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+
+    // The old plan is honestly revoked (authority removed) — nothing over-executes.
+    const rows = await plansOf(user.userId);
+    expect(rows.every((r) => r.status === "revoked")).toBe(true);
+  });
+});
+
 describe("plans query helpers", () => {
   it("list returns non-revoked cards only", async () => {
     const user = await makeSignerUser();

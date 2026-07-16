@@ -20,18 +20,22 @@ import {
   planResumedReceipt,
   plansActivatePayloadSchema,
   plansPausePayloadSchema,
+  plansRecreatePayloadSchema,
   plansRevokePayloadSchema,
   plansSetAutonomyPayloadSchema,
   revokePlanDigest,
   withSig,
+  type Autonomy,
+  type BrokerSection,
   type PlansActivatePayload,
+  type PlansRecreatePayload,
   type PlansRevokePayload,
 } from "@retenix/shared";
 import { REGISTRY } from "@retenix/registry";
 import { TRPCError } from "@trpc/server";
 import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
-import { resolveActivation } from "../lib/activate";
+import { resolveActivation, type ActivateResolution } from "../lib/activate";
 import { CADENCE_PERIOD_SECS } from "../lib/activation-mapping";
 import { readStoredDraft } from "../lib/draft-store";
 import { getPlanRelay } from "../lib/relay-factory";
@@ -55,6 +59,17 @@ export interface PlanCardData {
   status: "draft" | "active" | "paused" | "revoked";
   contractPlanId: number | null;
   params: unknown;
+}
+
+/** The two digests an active-card edit signs (prepareRecreate). */
+export interface PrepareRecreate {
+  revoke: { digest: string; nonce: string };
+  createPlan: {
+    digest: string;
+    nonce: string;
+    capPerExecUsd: number;
+    capPerPeriodUsd: number;
+  };
 }
 
 /** The C6 preview + the exact digest the owner signs (prepareActivation). */
@@ -512,6 +527,206 @@ export const plansRouter = router({
     }),
 
   // -------------------------------------------------------------------------
+  // prepareRecreate — the two digests (SEQUENTIAL nonces) an active-card edit
+  // signs: revoke the old plan (nonce N), create the edited plan (nonce N+1).
+  // Contract plans are immutable, so an edit is a revoke-and-recreate (doc 10
+  // task 8). Reuses resolveActivation via a synthetic draft from the stored
+  // params, so the edit re-enters the same validation a parse did.
+  // -------------------------------------------------------------------------
+  prepareRecreate: gatedProcedure
+    .input(plansRecreatePayloadSchema.pick({ planId: true, edits: true }))
+    .query(async ({ ctx, input }): Promise<PrepareRecreate> => {
+      const plan = await requireBrokerToRecreate(ctx.db, ctx.session.userId, input.planId);
+      const resolved = resolveRecreate(plan, input.edits.broker, ctx.session.region);
+      if (!resolved.ok || !resolved.onchain) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: resolved.ok ? "no onchain plan" : resolved.reason });
+      }
+      const relay = getPlanRelay();
+      const revokeNonce = await relay.authNonce(ctx.session.eoaAddr);
+      const createNonce = revokeNonce + 1n; // sequential (contract _useNonce)
+      const revokeDigest = revokePlanDigest(relay.domain, {
+        id: BigInt(plan.contractPlanId),
+        nonce: revokeNonce,
+      });
+      const createDigest = await relay.buildCreatePlanDigest({
+        capPerExec: resolved.onchain.capPerExec,
+        capPerPeriod: resolved.onchain.capPerPeriod,
+        periodSecs: resolved.onchain.periodSecs,
+        assetListHash: resolved.onchain.assetListHash,
+        nonce: createNonce,
+      });
+      return {
+        revoke: { digest: revokeDigest, nonce: revokeNonce.toString() },
+        createPlan: {
+          digest: createDigest,
+          nonce: createNonce.toString(),
+          capPerExecUsd: Number(resolved.onchain.capPerExec) / 1e6,
+          capPerPeriodUsd: Number(resolved.onchain.capPerPeriod) / 1e6,
+        },
+      };
+    }),
+
+  // -------------------------------------------------------------------------
+  // recreate — the active-card edit: revoke old + create new, TWO receipts,
+  // one confirmation (doc 10 task 8). The old broker (and any guardian sharing
+  // its onchain plan) is revoked; the edited plan is created fresh.
+  // -------------------------------------------------------------------------
+  recreate: gatedSignedProcedure
+    .input(withSig(plansRecreatePayloadSchema))
+    .mutation(async ({ ctx, input }): Promise<{ old: string[]; card: ActivatedCard }> => {
+      const payload = input.payload as PlansRecreatePayload;
+      const owner = ctx.session.eoaAddr;
+      const plan = await requireBrokerToRecreate(ctx.db, ctx.session.userId, payload.planId);
+      const resolved = resolveRecreate(plan, payload.edits.broker, ctx.session.region);
+      if (!resolved.ok || !resolved.onchain || !resolved.broker) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: resolved.ok ? "nothing to recreate" : resolved.reason });
+      }
+
+      const relay = getPlanRelay();
+      // 1. Revoke the old onchain plan (nonce N).
+      try {
+        await relay.revokePlanFor({
+          owner,
+          planId: BigInt(plan.contractPlanId),
+          nonce: BigInt(payload.revokeAuth.nonce),
+          ownerSig: payload.revokeAuth.signature,
+        });
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Couldn't reach the relay — your plan is unchanged.",
+          cause: err,
+        });
+      }
+
+      // 2. Create the edited plan (nonce N+1). If this fails after the revoke
+      //    landed, the old plan is already revoked — the card is honestly
+      //    revoked, and the user re-drafts. (An orphaned revoke is safe: it
+      //    only removes authority; nothing over-executes.)
+      let newPlanId: bigint;
+      let txHash: string;
+      try {
+        const res = await relay.createPlan({
+          owner,
+          capPerExec: resolved.onchain.capPerExec,
+          capPerPeriod: resolved.onchain.capPerPeriod,
+          periodSecs: resolved.onchain.periodSecs,
+          assetListHash: resolved.onchain.assetListHash,
+          assetIds: resolved.onchain.assetIds,
+          nonce: BigInt(payload.createPlanAuth.nonce),
+          ownerSig: payload.createPlanAuth.signature,
+        });
+        newPlanId = res.planId;
+        txHash = res.txHash;
+      } catch (err) {
+        // Old plan is revoked; mark the DB rows to match reality.
+        await ctx.db
+          .update(plans)
+          .set({ status: "revoked" })
+          .where(
+            and(
+              eq(plans.userId, ctx.session.userId),
+              eq(plans.contractPlanId, plan.contractPlanId),
+            ),
+          );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Your old plan was cancelled, but the new one didn't land — re-draft it.",
+          cause: err,
+        });
+      }
+
+      // 3. DB: revoke old rows, insert the edited broker (+ carried guardian).
+      const contractPlanId = Number(newPlanId);
+      const activatedAt = new Date();
+      const autonomy = payload.autonomy ?? (plan.autonomy ?? DEFAULT_BROKER_AUTONOMY);
+      const oldRows = await ctx.db
+        .select({ id: plans.id, kind: plans.kind })
+        .from(plans)
+        .where(
+          and(
+            eq(plans.userId, ctx.session.userId),
+            eq(plans.contractPlanId, plan.contractPlanId),
+          ),
+        );
+      await ctx.db
+        .update(plans)
+        .set({ status: "revoked" })
+        .where(
+          and(
+            eq(plans.userId, ctx.session.userId),
+            eq(plans.contractPlanId, plan.contractPlanId),
+          ),
+        );
+
+      const [brokerRow] = await ctx.db
+        .insert(plans)
+        .values({
+          userId: ctx.session.userId,
+          kind: "broker",
+          paramsJson: {
+            cadence: resolved.broker.cadence,
+            amountUsd: resolved.broker.amountUsd,
+            basket: resolved.broker.basket,
+            capPerExecUsd: Number(resolved.onchain.capPerExec) / 1e6,
+            capPerPeriodUsd: Number(resolved.onchain.capPerPeriod) / 1e6,
+            periodSecs: resolved.onchain.periodSecs,
+            nextRunAt: nextCadenceRun(resolved.broker.cadence, activatedAt, activatedAt).toISOString(),
+            autonomy,
+            topUpOptIn: false,
+          },
+          contractPlanId,
+          status: "active",
+          activatedAt,
+        })
+        .returning({ id: plans.id });
+
+      if (resolved.guardian) {
+        await ctx.db.insert(plans).values({
+          userId: ctx.session.userId,
+          kind: "guardian",
+          paramsJson: {
+            maxDrawdownPct: resolved.guardian.maxDrawdownPct,
+            weeklyCapUsd: resolved.guardian.weeklyCapUsd,
+            sharesPlanId: contractPlanId,
+          },
+          contractPlanId,
+          status: "active",
+          activatedAt,
+        });
+      }
+
+      // Two honest receipts: the old was dismissed, the new was hired.
+      await ctx.db.insert(events).values([
+        {
+          userId: ctx.session.userId,
+          type: "plan.revoked",
+          payloadJson: { contractPlanId: plan.contractPlanId, receipt: planDismissedReceipt("broker") },
+        },
+        {
+          userId: ctx.session.userId,
+          type: "plan.activated",
+          payloadJson: {
+            planId: brokerRow.id,
+            kind: "broker",
+            contractPlanId,
+            txHash,
+            receipt: brokerHiredReceipt({
+              amountUsd: resolved.broker.amountUsd,
+              cadence: resolved.broker.cadence,
+              tickers: resolved.broker.basket.map((l) => ticker(l.assetId)),
+            }),
+          },
+        },
+      ]);
+
+      return {
+        old: oldRows.map((r) => r.id),
+        card: { planId: brokerRow.id, kind: "broker", status: "active", contractPlanId },
+      };
+    }),
+
+  // -------------------------------------------------------------------------
   // pause / resume — the worker gates scheduling on plans.status === "active"
   // (doc 08 scheduler), so a DB-status flip is an ENFORCED stop. The contract's
   // pausePlan/resumePlan are onlyOwner(msg.sender) with no relayed variant and
@@ -595,6 +810,75 @@ interface OwnedPlan {
   status: "draft" | "active" | "paused" | "revoked";
   contractPlanId: number | null;
   paramsJson: unknown;
+}
+
+interface BrokerToRecreate {
+  contractPlanId: number;
+  broker: BrokerSection;
+  guardian?: { maxDrawdownPct?: number; weeklyCapUsd?: number };
+  autonomy?: Autonomy;
+}
+
+/** Load an ACTIVE broker card (with any guardian sharing its plan) for an edit. */
+async function requireBrokerToRecreate(
+  db: Db,
+  userId: string,
+  planId: string,
+): Promise<BrokerToRecreate> {
+  const plan = await requireOwnedPlan(db, userId, planId);
+  if (plan.kind !== "broker" || plan.status !== "active" || plan.contractPlanId === null) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "only an active Broker card can be edited",
+    });
+  }
+  const p = plan.paramsJson as {
+    cadence: BrokerSection["cadence"];
+    amountUsd: number;
+    basket: { assetId: string; pct: number }[];
+    autonomy?: Autonomy;
+  };
+  // A guardian sharing this onchain plan carries its caps forward on recreate.
+  const [g] = await db
+    .select({ paramsJson: plans.paramsJson })
+    .from(plans)
+    .where(
+      and(
+        eq(plans.userId, userId),
+        eq(plans.kind, "guardian"),
+        eq(plans.contractPlanId, plan.contractPlanId),
+        eq(plans.status, "active"),
+      ),
+    )
+    .limit(1);
+  const gp = g?.paramsJson as
+    | { maxDrawdownPct?: number; weeklyCapUsd?: number }
+    | undefined;
+  return {
+    contractPlanId: plan.contractPlanId,
+    broker: { cadence: p.cadence, amountUsd: p.amountUsd, basket: p.basket },
+    guardian: gp && (gp.maxDrawdownPct !== undefined || gp.weeklyCapUsd !== undefined) ? gp : undefined,
+    autonomy: p.autonomy,
+  };
+}
+
+/** Re-validate the edited broker (+carried guardian) via the activation path. */
+function resolveRecreate(
+  plan: BrokerToRecreate,
+  edit: BrokerSection,
+  region: string,
+): ActivateResolution {
+  // Synthetic draft = the card's current sections; the edit overrides broker.
+  const draft = {
+    broker: plan.broker,
+    guardian: plan.guardian,
+  };
+  return resolveActivation({
+    draft,
+    accept: { broker: true, guardian: Boolean(plan.guardian), legacy: false },
+    edits: { broker: edit },
+    region,
+  });
 }
 
 /** Fetch a plan the session user owns, or throw NOT_FOUND (never leak others'). */

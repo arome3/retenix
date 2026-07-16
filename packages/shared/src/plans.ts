@@ -123,6 +123,19 @@ export type PlansRevokePayload = z.infer<typeof plansRevokePayloadSchema>;
 export const plansPausePayloadSchema = z.object({ planId: z.uuid() });
 export type PlansPausePayload = z.infer<typeof plansPausePayloadSchema>;
 
+// Editing an ACTIVE broker card = revoke-and-recreate under one confirmation
+// (doc 10 task 8, PROPOSED — contract plans are immutable). Two relayed calls
+// (revoke old, create new) with SEQUENTIAL owner nonces (N, then N+1); two
+// receipts. The card UX hides the swap.
+export const plansRecreatePayloadSchema = z.object({
+  planId: z.uuid(),
+  edits: z.object({ broker: brokerSectionSchema }),
+  revokeAuth: relayedAuthSchema,
+  createPlanAuth: relayedAuthSchema,
+  autonomy: autonomySchema.optional(),
+});
+export type PlansRecreatePayload = z.infer<typeof plansRecreatePayloadSchema>;
+
 export const plansSetAutonomyPayloadSchema = z.object({
   planId: z.uuid(),
   autonomy: autonomySchema,
