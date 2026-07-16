@@ -398,7 +398,7 @@ function EmptyState() {
         <circle cx="45" cy="40" r="2" fill="currentColor" stroke="none" />
       </svg>
       <p className="text-body text-muted-foreground">
-        Your staff&rsquo;s work shows up here.
+        Your staff&apos;s work shows up here.
       </p>
     </div>
   );
