@@ -11,7 +11,8 @@
     "rehearse:staging": "tsx --env-file-if-exists=.env scripts/rehearse-staging-plan.ts",
     "rehearse:rogue": "tsx --env-file-if-exists=.env scripts/rehearse-rogue.ts",
     "rehearse:failure": "tsx --env-file-if-exists=.env scripts/rehearse-failure.ts",
-    "verify:nodup": "tsx --env-file-if-exists=.env scripts/verify-no-duplicates.ts"
+    "verify:nodup": "tsx --env-file-if-exists=.env scripts/verify-no-duplicates.ts",
+    "verify:kill": "tsx --env-file-if-exists=.env scripts/verify-kill.ts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3",
