@@ -11,3 +11,4 @@ export * from "./policy-draft";
 export * from "./basket";
 export * from "./plans";
 export * from "./feed";
+export * from "./portfolio";
