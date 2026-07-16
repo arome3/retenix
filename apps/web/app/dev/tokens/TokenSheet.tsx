@@ -8,6 +8,8 @@ import {
   refundedReceipt,
   sweepReceiptHeadline,
   type FeedItem,
+  ringSegments,
+  type PortfolioHolding,
 } from "@retenix/shared";
 import { useMounted } from "@/hooks/use-mounted";
 import { useNowMinute } from "@/hooks/use-now-minute";
@@ -16,6 +18,8 @@ import {
   ContinuityAvatar,
   GuardianAvatar,
 } from "@/components/avatars";
+import { AllocationRing } from "@/components/AllocationRing";
+import { HoldingRow } from "@/components/HoldingRow";
 import { ReceiptRow } from "@/components/ReceiptRow";
 import { HeroMoney } from "@/components/HeroMoney";
 import { IosInstallTeach } from "@/components/IosInstallTeach";
@@ -454,6 +458,18 @@ export function TokenSheet() {
           <DemoReceipts />
         </Section>
 
+        <Section title="Portfolio (C9 · C10)">
+          <p className="text-small text-muted-foreground">
+            The statement pieces (doc 12): the allocation ring wears the
+            neutral ramp — never gain/loss — at 1, 3, and 5 segments (legend
+            sums 100.00); rows carry the only gain/loss-colored text in the
+            system, a muted sparkline, the stale dot, and the honest &ldquo;—&rdquo;
+            when basis is unknowable. Screenshot in light/dark ± Accessible
+            colors: the ramp must not move when deltas do.
+          </p>
+          <DemoPortfolio />
+        </Section>
+
         <Section title="The staff">
           <div className="flex items-center gap-6">
             {(
@@ -598,5 +614,96 @@ function DemoReceipts() {
         </li>
       ))}
     </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio fixtures (doc 12) — deterministic, theme-switchable.
+// ---------------------------------------------------------------------------
+
+function demoHolding(over: Partial<PortfolioHolding>): PortfolioHolding {
+  return {
+    assetId: "spyx",
+    ticker: "SPYx",
+    name: "S&P 500 (tokenized)",
+    qty: 0.05,
+    qtyHuman: "0.05",
+    markUsd: 625.4,
+    markStale: false,
+    valueUsd: 31.27,
+    costBasisUsd: 30,
+    deltaUsd: 1.27,
+    deltaPct: 4.23,
+    spark: [28.1, 28.4, 28.2, 28.9, 29.3, 29.1, 29.8, 30.2, 30.0, 30.6, 30.4, 30.9, 31.1, 30.8, 31.0, 31.3, 31.1, 31.2, 31.2, 31.27],
+    disclosure:
+      "SPYx tracks the S&P 500 ETF. It is not a share — no voting rights or dividend claims. Issuer: Backed.",
+    ...over,
+  };
+}
+
+const DEMO_HOLDINGS: PortfolioHolding[] = [
+  demoHolding({}),
+  demoHolding({
+    assetId: "sol",
+    ticker: "SOL",
+    name: "Solana",
+    qty: 0.1,
+    qtyHuman: "0.1",
+    markUsd: 147.5,
+    valueUsd: 14.75,
+    costBasisUsd: 15.2,
+    deltaUsd: -0.45,
+    deltaPct: -2.96,
+    spark: [15.2, 15.1, 15.3, 15.0, 14.9, 15.0, 14.8, 14.9, 14.7, 14.75],
+    disclosure: undefined,
+  }),
+  demoHolding({
+    assetId: "tslax",
+    ticker: "TSLAx",
+    name: "Tesla (tokenized)",
+    qty: 0.02,
+    qtyHuman: "0.02",
+    markUsd: 241.1,
+    markStale: true,
+    valueUsd: 4.82,
+    costBasisUsd: null,
+    deltaUsd: null,
+    deltaPct: null,
+    spark: [], // <2 snapshot points → the sparkline hides itself
+  }),
+];
+
+const RING_CASES: { label: string; values: number[] }[] = [
+  { label: "1 asset", values: [100] },
+  { label: "3 assets", values: [61, 27, 12] },
+  { label: "5 assets", values: [38, 24, 17, 12, 9] },
+];
+
+function DemoPortfolio() {
+  return (
+    <div className="flex flex-col gap-8">
+      {RING_CASES.map((c) => (
+        <div key={c.label} className="flex flex-col gap-2">
+          <span className="text-caption text-muted-foreground">{c.label}</span>
+          <AllocationRing
+            segments={ringSegments(
+              c.values.map((v, i) => ({
+                assetId: `demo-${i}`,
+                ticker: ["SPYx", "QQQx", "SOL", "NVDAx", "AAPLx"][i],
+                valueUsd: v,
+              })),
+            )}
+            totalUsd={c.values.reduce((s, v) => s + v, 0)}
+          />
+        </div>
+      ))}
+      <ul className="m-0 flex list-none flex-col gap-3 p-0">
+        {DEMO_HOLDINGS.map((h) => (
+          <li key={h.assetId}>
+            <HoldingRow holding={h} onOpen={() => {}} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
