@@ -35,7 +35,7 @@ import {
   capText,
   effectiveSpent,
   executedReceipt,
-  networkName,
+  extractFundingSources,
   refundedReceipt,
   revokedReceipt,
   skippedReceipt,
@@ -256,34 +256,11 @@ const seqFromPeriodKey = (periodKey: string): number =>
 const JOB_TERMINAL = new Set(["done", "failed", "skipped"]);
 
 // --- funding sources (UA payload shapes are unfrozen — tolerant extraction) --
-
-export function extractFundingSources(detail: unknown, quote: unknown): string[] {
-  for (const payload of [detail, quote]) {
-    const deposits = (payload as { depositTokens?: unknown[] } | undefined)
-      ?.depositTokens;
-    if (Array.isArray(deposits) && deposits.length > 0) {
-      const names = uniqueChains(deposits);
-      if (names.length > 0) return names;
-    }
-  }
-  // Fallback: the quote's per-chain userOps (funding legs).
-  const ops = (quote as { userOps?: unknown[] } | undefined)?.userOps;
-  if (Array.isArray(ops)) return uniqueChains(ops);
-  return [];
-}
-
-function uniqueChains(items: unknown[]): string[] {
-  const names: string[] = [];
-  for (const item of items) {
-    const rec = item as { chainId?: unknown; token?: { chainId?: unknown } };
-    const chainId =
-      typeof rec.chainId === "number" ? rec.chainId : rec.token?.chainId;
-    if (typeof chainId !== "number") continue;
-    const name = networkName(chainId);
-    if (!names.includes(name)) names.push(name);
-  }
-  return names;
-}
+// Relocated to @retenix/shared (module 11 — the activity feed re-derives the
+// expansion's named sources with the SAME extractor that bakes them into
+// receipt_text; basket.ts precedent). Re-exported so existing imports from
+// "./executor" (executor.test.ts) stay valid.
+export { extractFundingSources } from "@retenix/shared";
 
 // =============================================================================
 // The attempt runner — one instance per executeJob invocation

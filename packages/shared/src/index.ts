@@ -10,3 +10,4 @@ export * from "./plan-params";
 export * from "./policy-draft";
 export * from "./basket";
 export * from "./plans";
+export * from "./feed";
