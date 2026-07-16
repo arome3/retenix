@@ -46,6 +46,14 @@ describe("worker env module", () => {
     expect(env.DATABASE_URL).toBe(VALID.DATABASE_URL);
     expect(env.DEMO_INACTIVITY_SECS).toBe(120);
     expect(env.DEMO_CHALLENGE_WINDOW_SECS).toBe(60);
+    expect(env.DEMO_MODE).toBe("0"); // demo affordances default OFF
+    expect(env.PORT).toBe(8080);
+  });
+
+  it("accepts DEMO_MODE=1 and rejects other values", async () => {
+    const on = await importEnv({ DEMO_MODE: "1" });
+    expect(on.env.DEMO_MODE).toBe("1");
+    await expect(importEnv({ DEMO_MODE: "yes" })).rejects.toThrow(/DEMO_MODE/);
   });
 
   it("fails fast at import, naming the missing variable", async () => {

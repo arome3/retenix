@@ -32,6 +32,15 @@ const schema = z.object({
   INTERNAL_API_TOKEN: z.string().min(1),
   DEMO_INACTIVITY_SECS: z.coerce.number().int().positive().default(120),
   DEMO_CHALLENGE_WINDOW_SECS: z.coerce.number().int().positive().default(60),
+  // "1" enables demo-only affordances (the rogue-instruction trigger).
+  // Doc 00 lists DEMO_MODE in the web table; the worker addition is doc 08's
+  // (recorded in HANDOFF) — the rogue endpoint must not exist otherwise.
+  DEMO_MODE: z.enum(["0", "1"]).default("0"),
+  // Internal HTTP surface (execute-now / demo rogue / healthz). PROPOSED
+  // (spec-silent): Railway injects PORT; 8080 is the local default.
+  PORT: z.coerce.number().int().positive().default(8080),
+  // Used only to fence dev-only affordances (raw agent key) out of prod.
+  NODE_ENV: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
