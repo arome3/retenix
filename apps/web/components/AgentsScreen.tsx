@@ -43,7 +43,14 @@ const STACKS: {
   { kind: "legacy", title: "Continuity", Avatar: ContinuityAvatar, empty: "No continuity plan yet." },
 ];
 
-export function AgentsScreen({ eoa }: { eoa: string }) {
+export function AgentsScreen({
+  eoa,
+  initialIntent,
+}: {
+  eoa: string;
+  /** Doc 12's Buy-more prefill — passed through to the intent bar. */
+  initialIntent?: string;
+}) {
   const roster = trpc.plans.list.useQuery();
   const [revoking, setRevoking] = useState<Card | null>(null);
   const [busy, setBusy] = useState(false);
@@ -176,7 +183,7 @@ export function AgentsScreen({ eoa }: { eoa: string }) {
       })}
 
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-[480px] border-t border-border bg-background/95 p-4 backdrop-blur">
-        <IntentBar eoa={eoa} onActivated={refresh} />
+        <IntentBar eoa={eoa} onActivated={refresh} initialText={initialIntent} />
       </div>
 
       <ConfirmSheet

@@ -50,11 +50,15 @@ interface Decline {
 export function IntentBar({
   eoa,
   onActivated,
+  initialText,
 }: {
   eoa: string;
   onActivated: () => void;
+  /** Seeds the input once (doc 12's Buy-more prefill) — state init only,
+   *  the user edits or sends it like anything they typed themselves. */
+  initialText?: string;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText ?? "");
   const [placeholderIdx] = useState(() =>
     // deterministic per mount (no Math.random in render); varies by clock tick.
     Math.floor(Date.now() / 4000) % PLACEHOLDERS.length,
