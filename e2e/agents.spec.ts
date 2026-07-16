@@ -144,6 +144,51 @@ test.describe("S3 Agents (doc 10)", () => {
     await expect(page.getByRole("button", { name: "Discard" })).toBeVisible();
   });
 
+  test("Edit changes $25→$30 pre-activation; Discard leaves the flow", async ({
+    page,
+  }) => {
+    await page.route("**/api/trpc/intent.parse**", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: {
+            data: {
+              ok: true,
+              draftId: "00000000-0000-0000-0000-000000000002",
+              confidenceNote: "Here's what I understood — check the numbers",
+              adviceFooter: false,
+              draft: {
+                broker: {
+                  cadence: "weekly",
+                  amountUsd: 25,
+                  basket: [{ assetId: "spyx", pct: 100 }],
+                },
+              },
+            },
+          },
+        }),
+      });
+    });
+
+    await page.goto("/agents");
+    await page.getByLabel("Describe an agent in your own words").fill("beat 3 edit");
+    await page.getByRole("button", { name: "Draft it" }).click();
+
+    await expect(page.getByText("$25.00 every week")).toBeVisible();
+    // Edit re-opens the numbers (draft cards edit freely — doc 10 task 8).
+    await page.getByRole("button", { name: "Edit" }).click();
+    const amount = page.getByLabel("Amount each run");
+    await amount.fill("30");
+    await expect(page.getByText("$30.00 every week")).toBeVisible();
+
+    // Discard leaves the flow (no rows written — the parse is a draft only).
+    await page.getByRole("button", { name: "Discard" }).click();
+    await expect(page.getByTestId("draft-review")).toHaveCount(0);
+    await expect(
+      page.getByLabel("Describe an agent in your own words"),
+    ).toBeVisible();
+  });
+
   test("S3 carries no banned vocabulary and is axe-clean", async ({ page }) => {
     await page.goto("/agents");
     await expect(page.getByRole("heading", { name: "Your agents" })).toBeVisible();

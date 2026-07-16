@@ -158,6 +158,22 @@ async function plansOf(userId: string) {
     .where(eq(plans.userId, userId));
 }
 
+/** Activate a broker+guardian plan for a signer user; return its cards. */
+async function activateBroker(user: SignerUser) {
+  setPlanRelayFactory(() => stubRelay());
+  const draftId = await seedDraft(user.userId, brokerDraft);
+  const input = await signedInput(
+    "plans.activate",
+    {
+      draftId,
+      accept: { broker: true, guardian: true, legacy: false },
+      createPlanAuth: auth(),
+    },
+    user.wallet,
+  );
+  return (await appRouter.createCaller(ctxFor(user)).plans.activate(input)).cards;
+}
+
 beforeEach(() => {
   setPlanRelayFactory(() => stubRelay());
 });
@@ -314,21 +330,6 @@ describe("plans.activate", () => {
 });
 
 describe("plans.revoke / pause / resume / setAutonomy", () => {
-  async function activateBroker(user: SignerUser) {
-    setPlanRelayFactory(() => stubRelay());
-    const draftId = await seedDraft(user.userId, brokerDraft);
-    const input = await signedInput(
-      "plans.activate",
-      {
-        draftId,
-        accept: { broker: true, guardian: true, legacy: false },
-        createPlanAuth: auth(),
-      },
-      user.wallet,
-    );
-    return (await appRouter.createCaller(ctxFor(user)).plans.activate(input)).cards;
-  }
-
   it("revoke zeroes both cards sharing the onchain plan (PS-F5-AC2)", async () => {
     const user = await makeSignerUser();
     const cards = await activateBroker(user);
@@ -420,5 +421,86 @@ describe("plans.revoke / pause / resume / setAutonomy", () => {
           ),
         ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("plans query helpers", () => {
+  it("list returns non-revoked cards only", async () => {
+    const user = await makeSignerUser();
+    const draftId = await seedDraft(user.userId, brokerDraft);
+    await appRouter.createCaller(ctxFor(user)).plans.activate(
+      await signedInput(
+        "plans.activate",
+        {
+          draftId,
+          accept: { broker: true, guardian: false, legacy: false },
+          createPlanAuth: auth(),
+        },
+        user.wallet,
+      ),
+    );
+    const before = await appRouter.createCaller(ctxFor(user)).plans.list();
+    expect(before.cards).toHaveLength(1);
+
+    const broker = before.cards[0];
+    await appRouter.createCaller(ctxFor(user)).plans.revoke(
+      await signedInput(
+        "plans.revoke",
+        { planId: broker.planId, revokeAuth: auth() },
+        user.wallet,
+      ),
+    );
+    const after = await appRouter.createCaller(ctxFor(user)).plans.list();
+    expect(after.cards).toHaveLength(0); // revoked cards drop off the roster
+  });
+
+  it("prepareRevoke returns a digest for an onchain card, null for a draft card", async () => {
+    const user = await makeSignerUser();
+    // Standalone guardian → a draft card with no onchain plan.
+    const gDraftId = await seedDraft(user.userId, { guardian: { weeklyCapUsd: 100 } });
+    await appRouter.createCaller(ctxFor(user)).plans.activate(
+      await signedInput(
+        "plans.activate",
+        { draftId: gDraftId, accept: { broker: false, guardian: true, legacy: false } },
+        user.wallet,
+      ),
+    );
+    const draftCard = (await plansOf(user.userId))[0];
+    const prep = await appRouter
+      .createCaller(ctxFor(user))
+      .plans.prepareRevoke({ planId: draftCard.id });
+    expect(prep.digest).toBeNull();
+  });
+
+  it("recentBlocks surfaces plan ids with a recent execution.blocked event", async () => {
+    const user = await makeSignerUser();
+    const cards = await activateBroker(user);
+    const broker = cards.find((c) => c.kind === "broker")!;
+    await db.insert(events).values({
+      userId: user.userId,
+      type: "execution.blocked",
+      payloadJson: { planId: broker.planId, reason: "OverExecCap" },
+    });
+    const res = await appRouter
+      .createCaller(ctxFor(user))
+      .plans.recentBlocks({ sinceMs: 120_000 });
+    expect(res.planIds).toContain(broker.planId);
+  });
+
+  it("recentBlocks ignores blocks older than the window", async () => {
+    const user = await makeSignerUser();
+    const cards = await activateBroker(user);
+    const broker = cards.find((c) => c.kind === "broker")!;
+    // A block from an hour ago, with sinceMs = 1 minute.
+    await db.insert(events).values({
+      userId: user.userId,
+      type: "execution.blocked",
+      payloadJson: { planId: broker.planId, reason: "OverExecCap" },
+      createdAt: new Date(Date.now() - 3_600_000),
+    });
+    const res = await appRouter
+      .createCaller(ctxFor(user))
+      .plans.recentBlocks({ sinceMs: 60_000 });
+    expect(res.planIds).not.toContain(broker.planId);
   });
 });

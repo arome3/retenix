@@ -53,6 +53,16 @@ export function AgentsScreen({ eoa }: { eoa: string }) {
 
   const refresh = () => roster.refetch();
 
+  // C3 amber flash (doc 10 task 11): poll blocked events every 15s and flash
+  // any card whose plan was just blocked — the guardian is seen working. This
+  // is the interim source; module 11's activity.feed takes it over (swap the
+  // query below for the feed's blocked stream — same planId shape).
+  const blocks = trpc.plans.recentBlocks.useQuery(
+    { sinceMs: 120_000 },
+    { refetchInterval: 15_000 },
+  );
+  const flashed = new Set(blocks.data?.planIds ?? []);
+
   async function pauseResume(card: Card, to: "pause" | "resume") {
     const envelope = await signEnvelope(`plans.${to}`, { planId: card.planId }, eoa);
     if (to === "pause") await trpcVanilla.plans.pause.mutate(envelope);
@@ -91,6 +101,7 @@ export function AgentsScreen({ eoa }: { eoa: string }) {
   }
 
   function cardState(card: Card): PolicyCardState {
+    if (card.status === "active" && flashed.has(card.planId)) return "blocked";
     return card.status === "revoked" ? "revoked" : (card.status as PolicyCardState);
   }
 

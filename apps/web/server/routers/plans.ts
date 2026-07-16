@@ -29,7 +29,8 @@ import {
 } from "@retenix/shared";
 import { REGISTRY } from "@retenix/registry";
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
+import { z } from "zod";
 import { resolveActivation } from "../lib/activate";
 import { CADENCE_PERIOD_SECS } from "../lib/activation-mapping";
 import { readStoredDraft } from "../lib/draft-store";
@@ -102,6 +103,36 @@ export const plansRouter = router({
         })),
     };
   }),
+
+  // -------------------------------------------------------------------------
+  // recentBlocks — plan ids with an `execution.blocked` event in the last
+  // window, for C3's amber flash (doc 10 task 11). This is the interim source
+  // until module 11's activity.feed drives the flash; the worker writes
+  // execution.blocked with the DB planId, so cards match directly.
+  // -------------------------------------------------------------------------
+  recentBlocks: gatedProcedure
+    .input(z.object({ sinceMs: z.number().int().positive().max(3_600_000).default(120_000) }))
+    .query(async ({ ctx, input }): Promise<{ planIds: string[] }> => {
+      const since = new Date(Date.now() - input.sinceMs);
+      const rows = await ctx.db
+        .select({ payloadJson: events.payloadJson })
+        .from(events)
+        .where(
+          and(
+            eq(events.userId, ctx.session.userId),
+            eq(events.type, "execution.blocked"),
+            gte(events.createdAt, since),
+          ),
+        );
+      const planIds = [
+        ...new Set(
+          rows
+            .map((r) => (r.payloadJson as { planId?: string }).planId)
+            .filter((id): id is string => typeof id === "string"),
+        ),
+      ];
+      return { planIds };
+    }),
 
   // -------------------------------------------------------------------------
   // prepareActivation (PROPOSED helper query) — the C6 preview: resolve the

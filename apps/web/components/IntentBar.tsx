@@ -112,14 +112,16 @@ export function IntentBar({
         }}
         onCancelConfirm={() => setConfirming(false)}
         onDiscard={discard}
-        onActivate={async (accept, autonomy) => {
+        onActivate={async (accept, autonomy, edits) => {
           setBusy(true);
           setError(null);
           try {
             // 1. Server preview: exact onchain terms + the digest to sign.
+            //    Edits ride along so the digest commits to the edited numbers.
             const prep = await trpcVanilla.plans.prepareActivation.query({
               draftId: parsed.draftId,
               accept,
+              edits,
             });
             // 2. Owner signs the createPlan digest (if a plan is created).
             const createPlanAuth = prep.createPlan
@@ -129,9 +131,9 @@ export function IntentBar({
                   eoa,
                 )
               : undefined;
-            // 3. Submit the signed activation.
+            // 3. Submit the signed activation (with the same edits).
             const input = await buildActivateInput(
-              { draftId: parsed.draftId, accept, autonomy, createPlanAuth },
+              { draftId: parsed.draftId, accept, edits, autonomy, createPlanAuth },
               eoa,
             );
             await trpcVanilla.plans.activate.mutate(input);
@@ -216,14 +218,22 @@ function DraftReview({
   onActivate: (
     accept: { broker: boolean; guardian: boolean; legacy: boolean },
     autonomy: Autonomy,
+    edits: { broker?: BrokerSection },
   ) => void;
 }) {
   const [autonomy, setAutonomy] = useState<Autonomy>("auto");
-  const { broker, guardian, legacy } = parsed.draft;
+  const { guardian, legacy } = parsed.draft;
+  // Draft cards edit freely (doc 10 task 8) — the broker amount is editable
+  // pre-activation; the server re-validates the edit against doc 09's schema.
+  const [broker, setBroker] = useState<BrokerSection | undefined>(parsed.draft.broker);
+  const [editing, setEditing] = useState(false);
   const accept = useMemo(
     () => ({ broker: Boolean(broker), guardian: Boolean(guardian), legacy: Boolean(legacy) }),
     [broker, guardian, legacy],
   );
+  // Only send an edit when the amount actually changed from what was parsed.
+  const brokerEdited =
+    broker && parsed.draft.broker && broker.amountUsd !== parsed.draft.broker.amountUsd;
 
   const sentence = confirmSentence(broker, guardian, legacy);
 
@@ -240,8 +250,27 @@ function DraftReview({
           title="Broker"
           terms={brokerTerms(broker)}
           adviceFooter={parsed.adviceFooter}
+          onEdit={() => setEditing((v) => !v)}
         >
           <AllocationDetail broker={broker} />
+          {editing && (
+            <label className="flex items-center gap-2 text-small text-muted-foreground">
+              Amount each run
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                step={1}
+                value={broker.amountUsd}
+                aria-label="Amount each run"
+                onChange={(e) => {
+                  const amountUsd = Math.max(1, Math.min(1000, Number(e.target.value) || 0));
+                  setBroker({ ...broker, amountUsd });
+                }}
+                className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-foreground tnum"
+              />
+            </label>
+          )}
           <div className="flex flex-col gap-1">
             <span className="text-caption text-muted-foreground">
               How much it may do on its own
@@ -292,7 +321,9 @@ function DraftReview({
         confirmLabel="Confirm"
         busy={busy}
         error={error}
-        onConfirm={() => onActivate(accept, autonomy)}
+        onConfirm={() =>
+          onActivate(accept, autonomy, brokerEdited ? { broker } : {})
+        }
       />
     </div>
   );
