@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, integer, bigint, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, integer, bigint, doublePrecision, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const planKind = pgEnum("plan_kind", ["broker", "guardian", "legacy"]);
 export const planStatus = pgEnum("plan_status", ["draft", "active", "paused", "revoked"]);
@@ -55,6 +55,19 @@ export const estates = pgTable("estates", {
   tuplesEnc: text("tuples_enc"),                       // encrypted escrowed 7702 tuples (doc 14)
   refreshedAt: timestamp("refreshed_at", { withTimezone: true }),
 });
+
+// PROPOSED (spec-silent) — doc 12: hourly portfolio valuation snapshots written by the
+// worker cron; power C11 chart ranges and C10 sparklines. NOT part of tech-spec §12's
+// core schema (doc 00 records it as a doc-12 extension); product-owner review by W3.
+// total_usd/per_asset_json carry display-only marks — nothing prices an execution here.
+export const portfolioSnapshots = pgTable("portfolio_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  totalUsd: doublePrecision("total_usd").notNull(),
+  perAssetJson: jsonb("per_asset_json").notNull(),     // { [assetId]: { qty, markUsd, valueUsd, stale? } }
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+},
+(t) => [index("portfolio_snapshots_user_at_idx").on(t.userId, t.at)]);
 
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
