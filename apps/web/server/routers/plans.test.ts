@@ -584,35 +584,7 @@ describe("plans query helpers", () => {
     expect(prep.digest).toBeNull();
   });
 
-  it("recentBlocks surfaces plan ids with a recent execution.blocked event", async () => {
-    const user = await makeSignerUser();
-    const cards = await activateBroker(user);
-    const broker = cards.find((c) => c.kind === "broker")!;
-    await db.insert(events).values({
-      userId: user.userId,
-      type: "execution.blocked",
-      payloadJson: { planId: broker.planId, reason: "OverExecCap" },
-    });
-    const res = await appRouter
-      .createCaller(ctxFor(user))
-      .plans.recentBlocks({ sinceMs: 120_000 });
-    expect(res.planIds).toContain(broker.planId);
-  });
-
-  it("recentBlocks ignores blocks older than the window", async () => {
-    const user = await makeSignerUser();
-    const cards = await activateBroker(user);
-    const broker = cards.find((c) => c.kind === "broker")!;
-    // A block from an hour ago, with sinceMs = 1 minute.
-    await db.insert(events).values({
-      userId: user.userId,
-      type: "execution.blocked",
-      payloadJson: { planId: broker.planId, reason: "OverExecCap" },
-      createdAt: new Date(Date.now() - 3_600_000),
-    });
-    const res = await appRouter
-      .createCaller(ctxFor(user))
-      .plans.recentBlocks({ sinceMs: 60_000 });
-    expect(res.planIds).not.toContain(broker.planId);
-  });
+  // recentBlocks tests retired with the route (module 11): the C3 flash now
+  // consumes activity.feed's blocked stream — covered by activity.test.ts
+  // filter-mapping tests and the S3 e2e.
 });

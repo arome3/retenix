@@ -18,6 +18,7 @@ import {
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { IntentBar } from "@/components/IntentBar";
 import { PolicyCard, type PolicyCardState } from "@/components/PolicyCard";
+import { useBlockedFlash } from "@/hooks/use-blocked-flash";
 import { personalSign, signEnvelope } from "@/lib/sign";
 import { brokerTerms, guardianTerms, legacyTerms } from "@/lib/policy-terms";
 import { trpc } from "@/lib/trpc";
@@ -53,15 +54,12 @@ export function AgentsScreen({ eoa }: { eoa: string }) {
 
   const refresh = () => roster.refetch();
 
-  // C3 amber flash (doc 10 task 11): poll blocked events every 15s and flash
-  // any card whose plan was just blocked — the guardian is seen working. This
-  // is the interim source; module 11's activity.feed takes it over (swap the
-  // query below for the feed's blocked stream — same planId shape).
-  const blocks = trpc.plans.recentBlocks.useQuery(
-    { sinceMs: 120_000 },
-    { refetchInterval: 15_000 },
-  );
-  const flashed = new Set(blocks.data?.planIds ?? []);
+  // C3 amber flash (doc 10 task 11 → doc 11 task 7): the feed's blocked
+  // stream drives it now — useBlockedFlash polls activity.feed({filter:
+  // "blocked"}) every 15s and reports plan ids blocked in the last 2 minutes;
+  // the guardian is seen working.
+  const blocks = useBlockedFlash();
+  const flashed = new Set(blocks.planIds);
 
   async function pauseResume(card: Card, to: "pause" | "resume") {
     const envelope = await signEnvelope(`plans.${to}`, { planId: card.planId }, eoa);
