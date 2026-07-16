@@ -1,6 +1,6 @@
 "use client";
 
-import { KILL_HOLD_MS } from "@retenix/shared";
+import { KILL_HOLD_MS, KILL_RETRYABLE_STATES } from "@retenix/shared";
 import { warmRegistry } from "@retenix/registry";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { KillProgress } from "@/components/KillProgress";
@@ -250,26 +250,36 @@ export function KillSurface({ eoa, region }: { eoa: string; region: string }) {
 
   // Surface-open work: pre-warm quotes for the AC1 budget (doc 05; failures
   // are non-fatal by design) and resume any interrupted kill (doc 13 crash
-  // resilience — the rows are the truth).
+  // resilience — the rows are the truth). A COMPLETED kill with unfinished
+  // legs also re-opens as the progress view: failed legs are retryable
+  // forever without re-arming the hold (PS-F6-AC2).
   useEffect(() => {
     marksRef.current.tapAtMs = readTapAtMs();
     void warmRegistry(browserUa(eoa), region).catch(() => {});
     let cancelled = false;
-    void trpcVanilla.kill.prepare
-      .query()
-      .then((prep) => {
+    void (async () => {
+      try {
+        const prep = await trpcVanilla.kill.prepare.query();
         if (cancelled) return;
         if (prep.activeKillId) {
           setPhase({ kind: "running", killId: prep.activeKillId });
           // Re-run pending legs / resume polling submitted ones, headlessly.
           void runKill(eoa, {}).catch(() => {});
-        } else {
-          setPhase({ kind: "idle" });
+          return;
         }
-      })
-      .catch(() => {
+        if (prep.lastKillId) {
+          const last = await trpcVanilla.kill.status.query({ killId: prep.lastKillId });
+          if (cancelled) return;
+          if (last.legs.some((l) => (KILL_RETRYABLE_STATES as readonly string[]).includes(l.outcome))) {
+            setPhase({ kind: "running", killId: prep.lastKillId });
+            return;
+          }
+        }
+        setPhase({ kind: "idle" });
+      } catch {
         if (!cancelled) setPhase({ kind: "idle" });
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
