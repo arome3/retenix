@@ -56,6 +56,21 @@ export async function createTestUser(region: string): Promise<TestUser> {
 }
 
 export async function deleteTestUser(user: TestUser): Promise<void> {
+  // FK order — module 11's feed specs seed plans → jobs → executions chains
+  // (e2e/support/feed-seed.ts); deleting the user first would violate the
+  // plans.user_id constraint. Empty chains make these no-ops.
+  await db().query(
+    `delete from executions where job_id in (
+       select j.id from jobs j join plans p on p.id = j.plan_id
+        where p.user_id = $1)`,
+    [user.userId],
+  );
+  await db().query(
+    `delete from jobs where plan_id in (
+       select id from plans where user_id = $1)`,
+    [user.userId],
+  );
+  await db().query("delete from plans where user_id = $1", [user.userId]);
   await db().query("delete from events where user_id = $1", [user.userId]);
   await db().query("delete from users where id = $1", [user.userId]);
 }
@@ -67,6 +82,22 @@ export async function deleteTestUser(user: TestUser): Promise<void> {
  */
 export async function sweepTestUsers(): Promise<number> {
   await db().query(
+    `delete from executions where job_id in (
+       select j.id from jobs j
+       join plans p on p.id = j.plan_id
+       join users u on u.id = p.user_id
+      where u.email_hash like '0xe2e%')`,
+  );
+  await db().query(
+    `delete from jobs where plan_id in (
+       select p.id from plans p join users u on u.id = p.user_id
+        where u.email_hash like '0xe2e%')`,
+  );
+  await db().query(
+    `delete from plans
+      where user_id in (select id from users where email_hash like '0xe2e%')`,
+  );
+  await db().query(
     `delete from events
       where user_id in (select id from users where email_hash like '0xe2e%')`,
   );
@@ -74,6 +105,15 @@ export async function sweepTestUsers(): Promise<number> {
     "delete from users where email_hash like '0xe2e%'",
   );
   return rowCount ?? 0;
+}
+
+/** Raw query access for co-located seed helpers (feed-seed.ts) — one pool,
+ *  closed by closeDb via global teardown. */
+export function dbQuery<T extends Record<string, unknown>>(
+  text: string,
+  params?: unknown[],
+): Promise<{ rows: T[] }> {
+  return db().query<T>(text, params as never[]);
 }
 
 export async function closeDb(): Promise<void> {
