@@ -137,11 +137,11 @@ const checks: Check[] = [
   { theme: "dark", fg: "positive", bg: "card", min: TEXT, label: "gain text on graphite-900" },
   { theme: "dark", fg: "negative", bg: "background", min: TEXT, label: "loss text on graphite-950" },
   { theme: "dark", fg: "negative", bg: "card", min: TEXT, label: "loss text on graphite-900" },
-  {
-    theme: "light", fg: "positive", bg: "background", min: LARGE,
-    label: "gain text on paper-50 (large only)",
-    note: "measures 4.32 — below 4.5; DS-10.2 fallback adopted: light-theme gain at caption/small sizes uses ink or the CVD pair (flagged in HANDOFF for docs 11/12)",
-  },
+  // module 12 closed module 01's open question: the companion light --positive
+  // (0.52) restores full-text contrast at every size, so the LARGE-only
+  // fallback is retired and delta text is token-colored app-wide.
+  { theme: "light", fg: "positive", bg: "background", min: TEXT, label: "gain text on paper-50" },
+  { theme: "light", fg: "positive", bg: "card", min: TEXT, label: "gain text on paper-100" },
   { theme: "light", fg: "negative", bg: "background", min: TEXT, label: "loss text on paper-50" },
 
   // — CVD pair (independent of mode — DS-2.2) —
@@ -180,11 +180,7 @@ const checks: Check[] = [
   { theme: "light", fg: "primary-foreground", bg: "primary", min: TEXT, label: "text on teal button (light)" },
   { theme: "dark", fg: "positive-foreground", bg: "positive", min: TEXT, label: "text on gain fill (dark)" },
   { theme: "dark", fg: "negative-foreground", bg: "negative", min: TEXT, label: "text on loss fill (dark)" },
-  {
-    theme: "light", fg: "positive-foreground", bg: "positive", min: LARGE,
-    label: "text on gain fill (light, large/non-text)",
-    note: "4.25 — light gain fills carry only large/bold or non-text content",
-  },
+  { theme: "light", fg: "positive-foreground", bg: "positive", min: TEXT, label: "text on gain fill (light)" },
   { theme: "light", fg: "negative-foreground", bg: "negative", min: TEXT, label: "text on loss fill (light)" },
 
   // — focus indicator (WCAG 2.4.11: ≥3:1 against adjacent surfaces) —
@@ -192,6 +188,32 @@ const checks: Check[] = [
   { theme: "dark", fg: "ring", bg: "card", min: LARGE, label: "focus ring on graphite-900" },
   { theme: "light", fg: "ring", bg: "background", min: LARGE, label: "focus ring on paper-50" },
   { theme: "light", fg: "ring", bg: "card", min: LARGE, label: "focus ring on paper-100" },
+
+  // — C9 allocation ring ramp (doc 12): DS-10.2 non-text ≥3:1 between every
+  //   ADJACENT segment. Segments take tokens 1..n largest-first, so the
+  //   binding pairs are the consecutive ones plus every wrap back to 1
+  //   (@retenix/shared REQUIRED_ALLOC_PAIRS mirrors this list). —
+  ...(
+    [
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [1, 3],
+      [1, 4],
+      [1, 5],
+    ] as const
+  ).flatMap(([a, b]) =>
+    (["light", "dark"] as const).map(
+      (theme): Check => ({
+        theme,
+        fg: `alloc-${a}`,
+        bg: `alloc-${b}`,
+        min: LARGE,
+        label: `allocation ramp ${a}↔${b} (adjacent segments)`,
+      }),
+    ),
+  ),
 ];
 
 // --- run ----------------------------------------------------------------------
