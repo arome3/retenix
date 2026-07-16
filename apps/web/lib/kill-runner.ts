@@ -83,7 +83,7 @@ export interface KillRunResult {
   tapToLastSubmitMs: number | null;
 }
 
-function browserUa(eoa: string): UniversalAccount {
+export function browserUa(eoa: string): UniversalAccount {
   return createUa({
     ownerAddress: eoa,
     credentials: {

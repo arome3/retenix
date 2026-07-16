@@ -194,11 +194,12 @@ test("beat-1 shape: skeletons first, then header + chart + ring + holdings, <5s 
   await expect(page.getByRole("button", { name: /SPYx, S&P 500/ })).toBeVisible();
   expect(Date.now() - t0).toBeLessThan(5000);
 
-  // C1 header hosts the money; the kill-switch slot is present and inert.
+  // C1 header hosts the money; the kill-switch entry is live (module 13) —
+  // an icon-sized link to the crimson surface, never inside tabs (DS-4.4).
   await expect(page.getByText("Buying power")).toBeVisible();
-  const killSlot = page.getByRole("button", { name: "Kill switch (not available yet)" });
-  await expect(killSlot).toBeVisible();
-  await expect(killSlot).toBeDisabled();
+  const killEntry = page.getByRole("link", { name: "Liquidate & Lock" });
+  await expect(killEntry).toBeVisible();
+  await expect(killEntry).toHaveAttribute("href", "/kill");
 
   // The ring's legend is the accessible structure and sums to exactly 100.00.
   const legend = page.getByRole("list", { name: "Allocation" });

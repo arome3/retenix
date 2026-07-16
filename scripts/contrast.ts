@@ -177,6 +177,11 @@ const checks: Check[] = [
   { theme: "light", fg: "destructive", bg: "background", min: TEXT, label: "crimson text on paper-50" },
   { theme: "dark", fg: "destructive-foreground", bg: "destructive", min: TEXT, label: "text on crimson button (dark)" },
   { theme: "light", fg: "destructive-foreground", bg: "destructive", min: TEXT, label: "text on crimson button (light)" },
+  {
+    theme: "dark", fg: "destructive-foreground", bg: "destructive", min: LARGE,
+    label: "C7 hold-ring arc on the crimson kill surface (non-text 1.4.11)",
+    note: "doc 13 — the ARC is destructive-foreground because raw teal on crimson measures 2.81 (<3); the teal survives as the DS-4.3 glow (drop-shadow), which is decorative",
+  },
 
   // — component fills —
   { theme: "dark", fg: "primary-foreground", bg: "primary", min: TEXT, label: "text on teal button (dark)" },

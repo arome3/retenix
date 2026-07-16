@@ -17,7 +17,6 @@ import {
   killExecutePayloadSchema,
   killReportLegPayloadSchema,
   type KillLegPayload,
-  type KillLegState,
 } from "./kill";
 import {
   killLegSoldReceipt,

@@ -74,8 +74,6 @@ import type { Context } from "../context";
  * decide WHETHER to kill (C3's "can never block your kill switch").
  */
 
-const VERIFY = { intervalMs: 1500, timeoutMs: 6000 } as const;
-
 /** A revoke relay attempt younger than this is assumed in flight — a
  *  converging execute must not double-spend the auth nonce. */
 const RELAY_ATTEMPT_STALE_MS = 30_000;
