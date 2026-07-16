@@ -15,6 +15,7 @@
     "@retenix/shared": "workspace:*",
     "@retenix/ua": "workspace:*",
     "@sentry/node": "^10",
+    "drizzle-orm": "^0.45.2",
     "ethers": "^6",
     "node-cron": "^4",
     "p-queue": "^9.3.1",
