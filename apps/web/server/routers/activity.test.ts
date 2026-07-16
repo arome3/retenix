@@ -4,6 +4,8 @@ import {
   blockedReceipt,
   brokerHiredReceipt,
   executedReceipt,
+  killLegSoldReceipt,
+  killReceiptText,
   refundedReceipt,
   sweepReceiptHeadline,
 } from "@retenix/shared";
@@ -272,6 +274,90 @@ describe("activity.feed", () => {
     expect(sweep.detail?.legs).toHaveLength(1);
     expect(sweep.detail?.legs?.[0].uaTxId).toBeUndefined(); // failed the guard
     expect(JSON.stringify(sweep.detail)).not.toContain("evil.example");
+  });
+
+  it("renders kill rows (module 13): terminal legs + the aggregate; in-flight legs skipped", async () => {
+    const userId = await makeUser();
+
+    // In-flight leg: no receipt string yet → never a feed row (doc 13's
+    // "legs stay out of the feed until terminal" contract).
+    await seedEvent(
+      userId,
+      "kill.leg",
+      { killId: randomUUID(), legId: randomUUID(), outcome: "submitted", assetId: "spyx" },
+      at(0),
+    );
+
+    // Terminal leg: display-ready receipt + guarded link + fees.
+    await seedEvent(
+      userId,
+      "kill.leg",
+      {
+        killId: randomUUID(),
+        legId: randomUUID(),
+        outcome: "settled",
+        assetId: "spyx",
+        qty: 0.05,
+        usd: 32.11,
+        receipt: killLegSoldReceipt("SPYx"),
+        transactionId: "killtx1234567890",
+        fees: FEES,
+      },
+      at(1),
+    );
+
+    // The aggregate: legs[] flow through the shared sweep mapper.
+    await seedEvent(
+      userId,
+      "kill.receipt",
+      {
+        killId: randomUUID(),
+        receipt: killReceiptText({ liquidated: 4, total: 5, retryable: 1, revoked: true }),
+        fees: FEES,
+        legs: [
+          {
+            chainId: 101,
+            network: "Solana",
+            symbol: "SPYx",
+            usd: 32.11,
+            outcome: "settled",
+            serverVerified: true,
+            transactionId: "killtx1234567890",
+          },
+          {
+            chainId: 42161,
+            network: "Arbitrum",
+            symbol: "ETH",
+            usd: 8.2,
+            outcome: "failed",
+            serverVerified: false,
+            error: "quote expired",
+            activityUrl: "https://evil.example/x",
+          },
+        ],
+      },
+      at(2),
+    );
+
+    const { items } = await walk(userId, "system");
+    expect(items).toHaveLength(2); // in-flight leg skipped
+
+    const [leg, aggregate] = items;
+    expect(leg.sentence).toBe("Sold SPYx — now USDC in your balance.");
+    expect(leg.variant).toBe("system");
+    expect(leg.detail?.uaTxId).toBe("killtx1234567890");
+    expect(leg.detail?.fees).toEqual(FEES);
+
+    expect(aggregate.sentence).toBe(
+      "Liquidated 4 of 5 positions to USDC · all agents revoked · 1 leg needs retry",
+    );
+    expect(aggregate.detail?.legs).toHaveLength(2);
+    expect(aggregate.detail?.legs?.[0].outcome).toBe("settled");
+    expect(aggregate.detail?.legs?.[0].uaTxId).toBe("killtx1234567890");
+    expect(aggregate.detail?.legs?.[1].outcome).toBe("failed");
+    expect(aggregate.detail?.legs?.[1].error).toBe("quote expired");
+    // Stored URLs are ignored — links rebuild from guarded ids only.
+    expect(JSON.stringify(aggregate.detail)).not.toContain("evil.example");
   });
 
   it("maps filters: trades / blocked / system partition the union", async () => {

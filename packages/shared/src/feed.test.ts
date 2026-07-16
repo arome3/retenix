@@ -106,8 +106,14 @@ describe("eventVariant / eventSentence", () => {
     expect(
       eventSentence("plan.activated", { receipt: "Your Broker is hired — $25.00 every week across SPYx." }),
     ).toBe("Your Broker is hired — $25.00 every week across SPYx.");
-    // forward contract for modules 13/14
+    // module 13's rows (kill.leg landed as a forward contract; kill.receipt
+    // is the aggregate) + module 14's forward contract
     expect(eventSentence("kill.leg", { receipt: "Sold …" })).toBe("Sold …");
+    expect(
+      eventSentence("kill.receipt", {
+        receipt: "Liquidated 4 of 5 positions to USDC · all agents revoked · 1 leg needs retry",
+      }),
+    ).toBe("Liquidated 4 of 5 positions to USDC · all agents revoked · 1 leg needs retry");
     expect(eventSentence("estate.checkin", { receipt: "Checked in." })).toBe("Checked in.");
   });
 
@@ -117,6 +123,37 @@ describe("eventVariant / eventSentence", () => {
     expect(eventSentence("plan.activated", { receipt: "" })).toBeNull();
     expect(eventSentence("plan.activated", null)).toBeNull();
     expect(eventSentence("sweep.receipt", { receipt: "wrong field" })).toBeNull();
+    // an in-flight kill leg has no receipt yet → skipped, never invented
+    expect(eventSentence("kill.leg", { outcome: "submitted" })).toBeNull();
+  });
+
+  it("kill.receipt legs flow through sweepLegsToDetail (SweepReceiptLeg-shaped)", () => {
+    const legs = sweepLegsToDetail({
+      legs: [
+        {
+          chainId: 101,
+          network: "Solana",
+          symbol: "SPYx",
+          usd: 32.11,
+          outcome: "settled",
+          serverVerified: true,
+          transactionId: "killtx1234567890",
+        },
+      ],
+    });
+    expect(legs).toEqual([
+      {
+        network: "Solana",
+        symbol: "SPYx",
+        usd: 32.11,
+        outcome: "settled",
+        serverVerified: true,
+        fees: undefined,
+        feeSource: undefined,
+        uaTxId: "killtx1234567890",
+        error: undefined,
+      },
+    ]);
   });
 
   it("feedAgentFrom accepts only plan kinds", () => {

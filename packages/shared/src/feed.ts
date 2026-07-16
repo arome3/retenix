@@ -75,9 +75,11 @@ export function executionVariant(status: ExecutionStatus): FeedVariant | null {
 // audit row and must never render as a receipt.
 // ---------------------------------------------------------------------------
 
-/** kill.leg / estate.checkin are forward contracts for modules 13/14: their
- *  payloads must carry a display-ready `receipt` string (HANDOFF note).
- *  sell.receipt is doc 12's flag-gated sell-from-detail (same rule). */
+/** kill.leg/kill.receipt are module 13's rows (per-leg receipts + the ONE
+ *  aggregate, doc 13); estate.checkin is module 14's forward contract. All
+ *  carry a display-ready `receipt` string — in-flight kill legs deliberately
+ *  lack it and are skipped until terminal. sell.receipt is doc 12's
+ *  flag-gated sell-from-detail (same rule). */
 export const FEED_EVENT_TYPES = [
   "plan.activated",
   "plan.revoked",
@@ -86,6 +88,7 @@ export const FEED_EVENT_TYPES = [
   "sweep.receipt",
   "sell.receipt",
   "kill.leg",
+  "kill.receipt",
   "estate.checkin",
 ] as const;
 export type FeedEventType = (typeof FEED_EVENT_TYPES)[number];

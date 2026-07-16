@@ -171,9 +171,10 @@ function eventToRow(row: EventRow): MergedRow {
     const legs = sweepLegsToDetail(payload);
     if (legs.length > 0) detail.legs = legs;
   }
-  if (row.type === "sell.receipt") {
-    // doc 12's sell rows: server-verified fees + the guarded onchain link
-    // (same passthrough-only discipline — stored strings never re-authored).
+  if (row.type === "sell.receipt" || row.type === "kill.leg") {
+    // doc 12's sell rows and doc 13's per-leg kill rows: server-verified fees
+    // + the guarded onchain link (same passthrough-only discipline — stored
+    // strings never re-authored; ids re-guarded, stored URLs ignored).
     const fees = feeTotalsSchema.safeParse(payload?.fees);
     if (fees.success) detail.fees = fees.data;
     if (
@@ -182,6 +183,15 @@ function eventToRow(row: EventRow): MergedRow {
     ) {
       detail.uaTxId = payload.transactionId;
     }
+  }
+  if (row.type === "kill.receipt") {
+    // doc 13's aggregate: legs[] are SweepReceiptLeg-shaped by contract
+    // (HANDOFF module 11), so the sweep mapper renders them — one mapper,
+    // zero drift. Retry chips attach where a consumer passes onRetryLeg.
+    const fees = feeTotalsSchema.safeParse(payload?.fees);
+    if (fees.success) detail.fees = fees.data;
+    const legs = sweepLegsToDetail(payload);
+    if (legs.length > 0) detail.legs = legs;
   }
   return {
     id: row.id,
