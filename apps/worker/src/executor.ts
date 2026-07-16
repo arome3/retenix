@@ -30,11 +30,13 @@ import { desc, eq } from "drizzle-orm";
 import { executions, jobs, plans, users, type Db } from "@retenix/db";
 import { REGISTRY, assetIdHash, eligibleAssets } from "@retenix/registry";
 import {
+  acceptableAddresses,
   blockedReceipt,
   brokerParamsSchema,
   capText,
   effectiveSpent,
   executedReceipt,
+  extractFillQty,
   extractFundingSources,
   refundedReceipt,
   revokedReceipt,
@@ -166,6 +168,10 @@ interface ExecQuoteJson {
   quote?: unknown; // raw create-time ITransaction (carries transactionId)
   policy?: { record?: TxIntent; refund?: TxIntent };
   uaDetail?: unknown; // last getTransaction payload
+  /** Normalized fill, written at finish (doc 12 additive): what this leg
+   *  bought, so basis math never re-derives it from raw payloads. qty is
+   *  best-effort from tokenChanges (shape OQ5-unfrozen) — null, not a guess. */
+  fill?: { assetId: string; usd: number; qty: number | null };
   pollDeadlineAt?: string;
   cause?: string; // why a refund was started (resume needs it)
   note?: string;
@@ -657,7 +663,18 @@ class LegRun {
       sources,
       fees,
     });
-    await this.saveQj({ uaDetail: safeJson(detail) });
+    const asset = REGISTRY.find((a) => a.id === this.leg.assetId);
+    const settled = safeJson(detail);
+    await this.saveQj({
+      uaDetail: settled,
+      fill: {
+        assetId: this.leg.assetId,
+        usd: this.leg.usd,
+        qty: asset
+          ? extractFillQty([settled, this.qj.quote], acceptableAddresses(asset))
+          : null,
+      },
+    });
     await this.setExec({ status: "finished", receiptText: receipt, feesJson: fees });
     await this.markJob("done");
     breadcrumb("step6:finished", { transactionId });

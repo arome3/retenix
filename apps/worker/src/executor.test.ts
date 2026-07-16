@@ -61,6 +61,14 @@ const quoteFixture = (transactionId: string) => ({
 const finishedDetail = () => ({
   status: 7,
   depositTokens: [{ token: { chainId: 8453 } }, { token: { chainId: 42161 } }],
+  tokenChanges: {
+    incr: [
+      {
+        token: { address: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W" },
+        amount: "0.02411",
+      },
+    ],
+  },
 });
 
 const CANONICAL_RECEIPT =
@@ -334,11 +342,15 @@ describe.skipIf(!url)("executor (db-backed state machine)", () => {
       policy: { record: { txHash: string } };
       pollDeadlineAt: string;
       uaDetail: unknown;
+      fill: { assetId: string; usd: number; qty: number | null };
     };
     expect(qj.quote.transactionId).toBe("UA-1");
     expect(qj.policy.record.txHash).toMatch(/^0xrecord/);
     expect(qj.pollDeadlineAt).toBeTruthy();
     expect(qj.uaDetail).toBeTruthy();
+    // doc 12 additive: the normalized fill lands at finish so basis math
+    // never re-derives it from raw payloads (qty from tokenChanges.incr).
+    expect(qj.fill).toEqual({ assetId: "spyx", usd: 15, qty: 0.02411 });
     expect((row.feesJson as { total: number }).total).toBeCloseTo(0.14, 6);
     expect((await jobOf(jobId)).status).toBe("done");
     expect(sends).toHaveLength(0);
