@@ -33,6 +33,35 @@ const webTestEnv = {
   RPC_URL_SOLANA: "https://solana-mainnet.g.alchemy.com/v2/test",
 };
 
+// apps/worker modules import ../env, which parses at import time (doc 08).
+// Same discipline as webTestEnv: placeholders for everything except
+// DATABASE_URL, which db-backed worker tests take from the real environment.
+const workerTestEnv = {
+  PARTICLE_PROJECT_ID: "00000000-0000-0000-0000-000000000000",
+  PARTICLE_CLIENT_KEY: "cK_test",
+  PARTICLE_APP_UUID: "00000000-0000-0000-0000-000000000000",
+  AWS_REGION: "us-east-1",
+  KMS_AGENT_KEY_ID: "arn:aws:kms:us-east-1:0:key/agent",
+  KMS_ESCROW_KEY_ID: "arn:aws:kms:us-east-1:0:key/escrow",
+  RPC_URL_ETHEREUM: "https://eth-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_BASE: "https://base-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_ARBITRUM: "https://arb-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_BSC: "https://bnb-mainnet.g.alchemy.com/v2/test",
+  RPC_URL_XLAYER: "https://rpc.xlayer.tech",
+  RPC_URL_SOLANA: "https://solana-mainnet.g.alchemy.com/v2/test",
+  POLICY_CONTRACT_ADDRESS: "0x606cDadeeb7FF1e3d86C92e34b2e24dC9E9C6024",
+  CLAIM_DELEGATE_ADDRESS_ETHEREUM: "0x0000000000000000000000000000000000000000",
+  CLAIM_DELEGATE_ADDRESS_BASE: "0x0000000000000000000000000000000000000000",
+  CLAIM_DELEGATE_ADDRESS_ARBITRUM: "0x0000000000000000000000000000000000000000",
+  CLAIM_DELEGATE_ADDRESS_BSC: "0x0000000000000000000000000000000000000000",
+  CLAIM_DELEGATE_ADDRESS_XLAYER: "0x0000000000000000000000000000000000000000",
+  ALCHEMY_WEBHOOK_SIGNING_KEY: "whsec_test",
+  SLACK_STATUS_WEBHOOK_URL: "https://hooks.slack.com/services/T0/B0/x",
+  SENTRY_DSN: "https://x.ingest.sentry.io/0",
+  INTERNAL_API_TOKEN: "internal-test-token",
+  DEMO_MODE: "1",
+};
+
 export default defineConfig({
   test: {
     projects: [
@@ -79,6 +108,7 @@ export default defineConfig({
           name: "worker",
           environment: "node",
           include: ["apps/worker/**/*.test.ts"],
+          env: workerTestEnv,
         },
       },
     ],
