@@ -191,6 +191,9 @@ export interface KillStartedPayload {
     state: KillRevokeState;
     txHash?: string;
     error?: string;
+    /** Set inside the creation tx so a concurrent execute converging on this
+     *  kill never double-relays a nonce the creator is about to spend. */
+    relayAttemptAtMs?: number;
     submittedAtMs?: number;
     confirmedAtMs?: number;
   };
@@ -211,6 +214,7 @@ export const killStartedPayloadSchema = z
         state: z.enum(["none", "submitted", "confirmed", "failed"]),
         txHash: z.string().optional(),
         error: z.string().optional(),
+        relayAttemptAtMs: z.number().optional(),
         submittedAtMs: z.number().optional(),
         confirmedAtMs: z.number().optional(),
       })

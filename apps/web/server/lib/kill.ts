@@ -93,7 +93,7 @@ function convertChainFor(primary: PrimaryAssetInput): number {
  * planning both would double-liquidate.
  */
 export function planKillLegs(input: {
-  positions: readonly { assetId: string; qty: number; qtyHuman: string }[];
+  positions: readonly { assetId: string; qty: number; qtyHuman?: string }[];
   primaries: readonly PrimaryAssetInput[];
   registry?: readonly RegistryAsset[];
   marks: ReadonlyMap<string, MarkValue>;
@@ -143,7 +143,9 @@ export function planKillLegs(input: {
       chainId: asset.chainId,
       network: networkName(asset.chainId), // copy-canon-allow
       token: asset.address,
-      amountHuman: position.qtyHuman,
+      // getRegistryBalances always carries qtyHuman for equities; the String
+      // fallback only ever fires for ledger rows, which are never sells.
+      amountHuman: position.qtyHuman ?? String(position.qty),
       usdEst: mark ? round2(position.qty * mark.usd) : null,
     });
   }
