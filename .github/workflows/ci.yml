@@ -65,6 +65,22 @@ jobs:
       - run: forge test -vvv
         working-directory: contracts
 
+  # doc 09 (PS-F3-AC1): the 25-utterance intent eval on RECORDED fixtures —
+  # deterministic, no model key, no DB. The live-model run is a manual gate
+  # before the demo (`pnpm eval:intent --live`); model responses drift, so it
+  # is never the CI mode.
+  intent-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval:intent
+
   pins:
     runs-on: ubuntu-latest
     steps:

@@ -81,6 +81,10 @@ export default tseslint.config(
       // e2e harness: runs outside the apps, drives them over HTTP, and mints a
       // session the way the server does (doc 02) rather than shipping a bypass.
       "e2e/support/**/*.ts",
+      // Intent eval + red-team CLIs (doc 09): env-gated tools reading
+      // ANTHROPIC_API_KEY / DATABASE_URL / APP_BASE_URL like the other
+      // sanctioned script entries above.
+      "e2e/intent-eval/**/*.ts",
     ],
     rules: { "no-restricted-properties": "off" },
   },

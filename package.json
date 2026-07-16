@@ -15,6 +15,7 @@
     "db:push": "pnpm --filter @retenix/db db:push",
     "db:generate": "pnpm --filter @retenix/db db:generate",
     "e2e": "playwright test --config e2e/playwright.config.ts --pass-with-no-tests",
+    "eval:intent": "tsx e2e/intent-eval/run.ts",
     "check:pins": "node scripts/check-pins.mjs",
     "contrast": "node --experimental-strip-types scripts/contrast.ts",
     "copy-canon": "node scripts/copy-canon.mjs"
@@ -28,6 +29,7 @@
     "eslint-config-next": "16.2.10",
     "jose": "^6.2.3",
     "pg": "^8",
+    "tsx": "^4",
     "typescript": "^5",
     "typescript-eslint": "^8",
     "vitest": "^4"

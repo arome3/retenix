@@ -1,0 +1,208 @@
+{
+  "recordedAt": "2026-07-16T00:00:00.000Z",
+  "model": "claude-sonnet-4-5",
+  "region": "DE",
+  "synthetic": true,
+  "note": "SYNTHETIC fixtures — hand-authored raw model outputs consistent with the verbatim system prompt and schema, NOT recorded from the live model (the local ANTHROPIC_API_KEY is an 18-char placeholder; Anthropic returns 401). They keep the CI job deterministic and exercise the full production pipeline (validation, drops, re-normalization, footer detection). Owner-action before the W3 freeze: set a real key in apps/web/.env.local, run `pnpm eval:intent --record` (overwrites this file with live outputs and clears this flag path), reconcile utterances.json expectations to observed model behavior, and re-commit. See docs/prompts/HANDOFF.md module 09.",
+  "outcomes": {
+    "01-canonical-seed": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 25,
+          "basket": [
+            { "assetId": "spyx", "pct": 60 },
+            { "assetId": "tslax", "pct": 30 },
+            { "assetId": "sol", "pct": 10 }
+          ]
+        },
+        "guardian": { "maxDrawdownPct": 15 }
+      }
+    },
+    "02-beat3-seed": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 25,
+          "basket": [
+            { "assetId": "spyx", "pct": 70 },
+            { "assetId": "tslax", "pct": 30 }
+          ]
+        },
+        "guardian": { "maxDrawdownPct": 15 }
+      }
+    },
+    "03-daily-single-equity": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "daily",
+          "amountUsd": 10,
+          "basket": [{ "assetId": "spyx", "pct": 100 }]
+        }
+      }
+    },
+    "04-weekly-single-crypto": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 50,
+          "basket": [{ "assetId": "eth", "pct": 100 }]
+        }
+      }
+    },
+    "05-monthly-explicit-pair": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "monthly",
+          "amountUsd": 200,
+          "basket": [
+            { "assetId": "qqqx", "pct": 50 },
+            { "assetId": "msftx", "pct": 50 }
+          ]
+        }
+      }
+    },
+    "06-five-asset-basket": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "monthly",
+          "amountUsd": 500,
+          "basket": [
+            { "assetId": "spyx", "pct": 40 },
+            { "assetId": "aaplx", "pct": 20 },
+            { "assetId": "nvdax", "pct": 20 },
+            { "assetId": "googlx", "pct": 10 },
+            { "assetId": "sol", "pct": 10 }
+          ]
+        }
+      }
+    },
+    "07-guardian-cap-only": {
+      "kind": "output",
+      "raw": { "guardian": { "weeklyCapUsd": 100 } }
+    },
+    "08-guardian-drawdown-only": {
+      "kind": "output",
+      "raw": { "guardian": { "maxDrawdownPct": 20 } }
+    },
+    "09-guardian-both": {
+      "kind": "output",
+      "raw": { "guardian": { "maxDrawdownPct": 30, "weeklyCapUsd": 250 } }
+    },
+    "10-legacy-with-email": {
+      "kind": "output",
+      "raw": {
+        "legacy": { "beneficiaryEmail": "ada@example.com", "inactivityDays": 365 }
+      }
+    },
+    "11-legacy-no-email": {
+      "kind": "output",
+      "raw": {}
+    },
+    "12-legacy-days-email": {
+      "kind": "output",
+      "raw": {
+        "legacy": { "beneficiaryEmail": "mara@retenix.app", "inactivityDays": 90 }
+      }
+    },
+    "13-vague-two-asset": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "monthly",
+          "amountUsd": 100,
+          "basket": [
+            { "assetId": "nvdax", "pct": 80 },
+            { "assetId": "aaplx", "pct": 20 }
+          ]
+        }
+      }
+    },
+    "14-overbound-amount": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 1000,
+          "basket": [{ "assetId": "spyx", "pct": 100 }]
+        }
+      }
+    },
+    "15-overbound-weekly-cap": {
+      "kind": "output",
+      "raw": { "guardian": { "weeklyCapUsd": 5000 } }
+    },
+    "16-underbound-inactivity": {
+      "kind": "output",
+      "raw": {
+        "legacy": { "beneficiaryEmail": "kin@example.com", "inactivityDays": 30 }
+      }
+    },
+    "17-out-of-registry-decline": {
+      "kind": "output",
+      "raw": {}
+    },
+    "18-out-of-registry-mixed": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 60,
+          "basket": [{ "assetId": "spyx", "pct": 100 }]
+        }
+      }
+    },
+    "19-chitchat-weather": {
+      "kind": "output",
+      "raw": {}
+    },
+    "20-chitchat-smalltalk": {
+      "kind": "output",
+      "raw": {}
+    },
+    "21-adversarial-injection": {
+      "kind": "output",
+      "raw": {}
+    },
+    "22-adversarial-fake-system": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 25,
+          "basket": [{ "assetId": "spyx", "pct": 100 }]
+        }
+      }
+    },
+    "23-adversarial-homoglyph": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 30,
+          "basket": [{ "assetId": "spyx", "pct": 100 }]
+        }
+      }
+    },
+    "24-adversarial-approve": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "monthly",
+          "amountUsd": 40,
+          "basket": [{ "assetId": "qqqx", "pct": 100 }]
+        }
+      }
+    },
+    "25-adversarial-flood": {
+      "kind": "output",
+      "raw": {}
+    }
+  }
+}
