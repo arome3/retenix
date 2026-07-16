@@ -215,3 +215,48 @@ export const planPausedReceipt = (kind: keyof typeof AGENT_TITLE): string =>
   `Your ${AGENT_TITLE[kind]} is paused — nothing runs until you resume it.`;
 export const planResumedReceipt = (kind: keyof typeof AGENT_TITLE): string =>
   `Your ${AGENT_TITLE[kind]} is back on duty.`;
+
+// --- kill-switch receipts (module 13; doc 13's aggregate wording is PROPOSED
+// --- and implemented verbatim — never redesigned; flagged in HANDOFF) ---
+
+/** Per-leg settled sell. Number-free like module 12's sell.receipt — the
+ *  aggregate carries the honest totals; per-leg USD lives in the leg detail. */
+export const killLegSoldReceipt = (ticker: string): string =>
+  `Sold ${ticker} — now USDC in your balance.`;
+
+/** Per-leg settled convert (non-USDC primary → USDC). */
+export const killLegConvertedReceipt = (symbol: string): string =>
+  `Converted ${symbol} to USDC in your balance.`;
+
+/** Per-leg failure — honest, retry lives on the surface (PS-F6-AC2). */
+export const killLegFailedReceipt = (symbol: string): string =>
+  `Couldn't liquidate ${symbol} — you can retry.`;
+
+/** Per-leg server-unverifiable claim (sweep's honesty posture). */
+export const killLegUnverifiedReceipt = (symbol: string): string =>
+  `${symbol} liquidation couldn't be verified — you can retry.`;
+
+/**
+ * THE aggregate kill receipt (event kill.receipt) — doc 13 PROPOSED wording,
+ * honest counts: "Liquidated 4 of 5 positions to USDC · all agents revoked ·
+ * 1 leg needs retry". Refunded/unverified legs count as needing retry (the
+ * position is still held). A failed revoke never claims "revoked".
+ */
+export function killReceiptText(e: {
+  liquidated: number;
+  total: number;
+  retryable: number;
+  revoked: boolean;
+}): string {
+  const revokeClause = e.revoked
+    ? "all agents revoked"
+    : "agent revocation still pending";
+  if (e.total === 0) {
+    // Zero-position kill (all-USDC account): still a real kill — PROPOSED.
+    return `Nothing to liquidate — ${revokeClause}`;
+  }
+  const head = `Liquidated ${e.liquidated} of ${e.total} positions to USDC · ${revokeClause}`;
+  if (e.retryable <= 0) return head;
+  const legs = e.retryable === 1 ? "1 leg needs retry" : `${e.retryable} legs need retry`;
+  return `${head} · ${legs}`;
+}
