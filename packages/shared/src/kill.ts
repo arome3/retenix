@@ -130,8 +130,9 @@ export interface KillLegPayload {
   expectUsdc?: number;
   /** convert: SUPPORTED_TOKEN_TYPE value of the funding primary. */
   primaryType?: string;
-  /** Planning-time USD estimate (progress UI). */
-  usdEst: number;
+  /** Planning-time USD estimate (progress UI); null = no mark → renders "—",
+   *  never a guessed number (doc 12's honesty rule). */
+  usdEst: number | null;
   outcome: KillLegState;
   attempt: number;
   transactionId?: string;
@@ -161,7 +162,7 @@ export const killLegPayloadSchema = z
     amountHuman: z.string().optional(),
     expectUsdc: z.number().optional(),
     primaryType: z.string().optional(),
-    usdEst: z.number(),
+    usdEst: z.number().nullable(),
     outcome: z.enum(KILL_LEG_STATES),
     attempt: z.number().int().default(1),
     transactionId: z.string().optional(),
@@ -326,5 +327,5 @@ export interface KillWorkItem {
   /** convert: USDC expect amount + the funding primary's token type. */
   expectUsdc?: number;
   primaryType?: string;
-  usdEst: number;
+  usdEst: number | null;
 }
