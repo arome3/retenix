@@ -38,8 +38,13 @@ export const fmtDelta = (usdV: number, pctV: number) =>
   `${usdV >= 0 ? "▲ +" : "▼ −"}${fmtUsd(Math.abs(usdV)).replace("$", "$")} (${usdV >= 0 ? "+" : "−"}${fmtPct(Math.abs(pctV))})`;
 
 /** Addresses: first 6 / last 4, `0x1234…abcd`. Geist Mono, copy-full
- *  affordance; receipts & settings only — never decision surfaces. */
-export const truncAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+ *  affordance; receipts & settings only — never decision surfaces. Strings
+ *  the ellipsis wouldn't shorten (≤ 11 chars) pass through whole — slicing
+ *  them would duplicate characters, not truncate (doc 15 edge-case pin).
+ *  Non-hex data (Solana base58) truncates the same way: it is data, and
+ *  first-6/last-4 is the one rule (DS-9.3). */
+export const truncAddr = (a: string) =>
+  a.length <= 11 ? a : `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 const timeFmt = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",

@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc -b",
     "smoke": "tsx scripts/smoke.ts",
-    "seed:dust": "tsx scripts/seed-dust.ts"
+    "seed:dust": "tsx scripts/seed-dust.ts",
+    "smoke:send": "tsx scripts/send-smoke.ts"
   },
   "dependencies": {
     "@particle-network/universal-account-sdk": "2.0.3",

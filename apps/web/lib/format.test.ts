@@ -72,6 +72,21 @@ describe("truncAddr", () => {
       "0xAbCd…aBcD",
     );
   });
+
+  // doc 15 DoD — edge cases: short strings and non-hex data
+  it("strings the ellipsis wouldn't shorten pass through whole", () => {
+    expect(truncAddr("")).toBe("");
+    expect(truncAddr("0xab")).toBe("0xab");
+    expect(truncAddr("0x123456789")).toBe("0x123456789"); // 11 chars — as-is
+    expect(truncAddr("0x1234567890ab")).toBe("0x1234…90ab"); // 14 chars — truncates
+  });
+
+  it("non-hex data (Solana base58, ENS-ish) truncates by the same rule", () => {
+    expect(truncAddr("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")).toBe(
+      "EPjFWd…Dt1v",
+    );
+    expect(truncAddr("a-long-name-that-is-data.eth")).toBe("a-long….eth");
+  });
 });
 
 describe("relTime", () => {
