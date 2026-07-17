@@ -38,11 +38,19 @@ const BANNED = [
   { word: "sign transaction", re: /\bsign(?:ing)?[\s-]transactions?\b/i },
   { word: "smart contract", re: /\bsmart[\s-]contracts?\b/i },
   { word: "delegate", re: /\bdelegat(?:e|es|ed|ing|ion|ions)\b/i },
+  // G12 (doc 20): decision surfaces say "gold", never "RWA" / "real-world
+  // assets" (allowed only on the security/disclosure page, via copy-canon-allow).
+  { word: "rwa", re: /\brwa\b/i },
+  { word: "real-world asset", re: /\breal[\s-]world\s+assets?\b/i },
 ];
 
 const ALLOWED_PHRASES = [
   /enforced on-chain/gi,
   /enforced by the chain, not by us/gi,
+  // "rwa-gold" is the registry KIND identifier (code in server logic), never
+  // user copy — strip it before the RWA ban scans, so `kind === "rwa-gold"`
+  // comparisons don't trip. Standalone prose "RWA" is still caught.
+  /rwa-gold/gi,
 ];
 
 const ALLOW_MARKER = "copy-canon-allow";

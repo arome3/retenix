@@ -203,6 +203,33 @@
     "25-adversarial-flood": {
       "kind": "output",
       "raw": {}
+    },
+    "26-gold-mixed-basket": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 25,
+          "basket": [
+            { "assetId": "spyx", "pct": 60 },
+            { "assetId": "paxg", "pct": 20 },
+            { "assetId": "sol", "pct": 20 }
+          ]
+        }
+      }
+    },
+    "27-gold-add-vague": {
+      "kind": "output",
+      "raw": {
+        "broker": {
+          "cadence": "weekly",
+          "amountUsd": 20,
+          "basket": [
+            { "assetId": "sol", "pct": 50 },
+            { "assetId": "paxg", "pct": 50 }
+          ]
+        }
+      }
     }
   }
 }

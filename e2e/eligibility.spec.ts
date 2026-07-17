@@ -32,6 +32,9 @@ const BANNED = [
   /\bslippage\b/i,
   /\bsmart[\s-]contracts?\b/i,
   /\bdelegat(?:e|es|ed|ing|ion|ions)\b/i,
+  // doc 20 G12: the fallback offers "tokenized gold", never "RWA".
+  /\brwa\b/i,
+  /\breal[\s-]world\s+assets?\b/i,
 ];
 
 // Verbatim correct-answer substrings (doc 04). Clicking the option text forwards
@@ -202,7 +205,10 @@ test.describe("PS-F1.3 · restricted region — a hard block that is not a wall"
         name: "Tokenized stocks aren't available in your region",
       }),
     ).toBeVisible();
-    await expect(page.getByText("crypto basket — SOL and ETH")).toBeVisible();
+    // doc 20: the US fallback now offers crypto + gold (not crypto-only).
+    await expect(
+      page.getByText("crypto basket — SOL and ETH — plus tokenized gold"),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Continue" }).click();
     await answerQuiz(page);
