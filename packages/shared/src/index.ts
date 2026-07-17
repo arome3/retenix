@@ -16,3 +16,4 @@ export * from "./portfolio-fills";
 export * from "./marks";
 export * from "./sell";
 export * from "./kill";
+export * from "./estate";

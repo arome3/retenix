@@ -260,3 +260,39 @@ export function killReceiptText(e: {
   const legs = e.retryable === 1 ? "1 leg needs retry" : `${e.retryable} legs need retry`;
   return `${head} · ${legs}`;
 }
+
+// --- estate receipts (module 14; PROPOSED copy — Continuity's voice, calm
+// --- safety-milestone register per G15: restrained, nothing celebrates) ---
+
+/** Enrollment completed (event estate.enrolled). */
+export const estateEnrolledReceipt = (): string =>
+  "Inheritance plan set — your everyday activity keeps it current.";
+
+/** Relayed check-in from OBSERVED account activity (heartbeat.ts). Receipts
+ *  may name where the activity happened (doc 01 transparency exception). */
+export const estateCheckinObservedReceipt = (networkName: string): string =>
+  `Checked in — your activity on ${networkName} kept your inheritance plan current.`;
+
+/** The explicit "I'm here" tap. When it lands mid-countdown the same relayed
+ *  call cancels the countdown — that sentence is the PS-F7-AC2 moment and its
+ *  wording is doc-14-verbatim. */
+export const estateCheckinButtonReceipt = (cancelledCountdown: boolean): string =>
+  cancelledCountdown
+    ? "Welcome back. The countdown is cancelled."
+    : "Checked in — you pressed “I’m here”.";
+
+/** DeadlineFired observed (event estate.countdown_started). */
+export const estateCountdownStartedReceipt = (): string =>
+  "Inheritance countdown started — check in any time to cancel it.";
+
+/** Alchemy webhook notification (event estate.activity_noticed) — UX only;
+ *  the plan's timer moves on confirmed check-ins, and this sentence must not
+ *  imply otherwise. */
+export const estateActivityNoticedReceipt = (networkName: string): string =>
+  `We noticed activity on ${networkName} — confirming your check-in now.`;
+
+/** The claim finished (event estate.claimed) — the owner-side ledger record. */
+export const estateClaimedReceipt = (sourceCount: number): string =>
+  sourceCount === 1
+    ? "Your estate was claimed — assets moved to your beneficiary from 1 source."
+    : `Your estate was claimed — assets moved to your beneficiary from ${sourceCount} sources.`;

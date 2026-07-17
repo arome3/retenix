@@ -90,6 +90,10 @@ export const FEED_EVENT_TYPES = [
   "kill.leg",
   "kill.receipt",
   "estate.checkin",
+  "estate.enrolled",
+  "estate.countdown_started",
+  "estate.activity_noticed",
+  "estate.claimed",
 ] as const;
 export type FeedEventType = (typeof FEED_EVENT_TYPES)[number];
 
