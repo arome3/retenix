@@ -30,16 +30,25 @@ export interface EscrowContext {
 }
 
 /** Structural key provider. KMS adapters wrap GenerateDataKeyCommand /
- *  DecryptCommand; the dev provider derives keys from a local secret. */
+ *  DecryptCommand (convert AWS's Uint8Arrays with toBuffer below); the dev
+ *  provider derives keys from a local secret. Buffer-native on purpose —
+ *  node's crypto typings and the TS 5.x Uint8Array generics don't mix. */
 export interface EscrowKeyProvider {
   readonly kind: "kms" | "dev";
   generateDataKey(
     context: Record<string, string>,
-  ): Promise<{ plaintextKey: Uint8Array; encryptedKey: Uint8Array }>;
+  ): Promise<{ plaintextKey: Buffer; encryptedKey: Buffer }>;
   decryptDataKey(
-    encryptedKey: Uint8Array,
+    encryptedKey: Buffer,
     context: Record<string, string>,
-  ): Promise<Uint8Array>;
+  ): Promise<Buffer>;
+}
+
+/** Generic-safe Uint8Array → Buffer copy (for KMS adapter boundaries). */
+export function toBuffer(bytes: Uint8Array): Buffer {
+  const copy = Buffer.alloc(bytes.byteLength);
+  copy.set(bytes);
+  return copy;
 }
 
 const envelopeSchema = z.object({
@@ -73,12 +82,13 @@ export async function encryptEnvelope(
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", plaintextKey, iv);
     cipher.setAAD(aad(ctx));
-    const input = typeof plaintext === "string" ? Buffer.from(plaintext, "utf8") : plaintext;
+    const input =
+      typeof plaintext === "string" ? Buffer.from(plaintext, "utf8") : toBuffer(plaintext);
     const ct = Buffer.concat([cipher.update(input), cipher.final()]);
     const blob: EscrowEnvelope = {
       v: 1,
       kind: provider.kind,
-      encKey: Buffer.from(encryptedKey).toString("base64"),
+      encKey: encryptedKey.toString("base64"),
       iv: iv.toString("base64"),
       tag: cipher.getAuthTag().toString("base64"),
       ct: ct.toString("base64"),
@@ -86,7 +96,7 @@ export async function encryptEnvelope(
     return JSON.stringify(blob);
   } finally {
     // the DEK never outlives the write
-    if (plaintextKey.fill) plaintextKey.fill(0);
+    plaintextKey.fill(0);
   }
 }
 
@@ -117,7 +127,7 @@ export async function decryptEnvelope(
     decipher.setAuthTag(Buffer.from(env.tag, "base64"));
     return Buffer.concat([decipher.update(Buffer.from(env.ct, "base64")), decipher.final()]);
   } finally {
-    if (key.fill) key.fill(0);
+    key.fill(0);
   }
 }
 
@@ -147,10 +157,9 @@ export function devEscrowProvider(secret: string): EscrowKeyProvider {
       return Promise.resolve({ plaintextKey: dek, encryptedKey });
     },
     decryptDataKey(encryptedKey, context) {
-      const buf = Buffer.from(encryptedKey);
-      const iv = buf.subarray(0, 12);
-      const tag = buf.subarray(12, 28);
-      const wrapped = buf.subarray(28);
+      const iv = encryptedKey.subarray(0, 12);
+      const tag = encryptedKey.subarray(12, 28);
+      const wrapped = encryptedKey.subarray(28);
       const decipher = createDecipheriv("aes-256-gcm", kek, iv);
       decipher.setAAD(Buffer.from(JSON.stringify(context), "utf8"));
       decipher.setAuthTag(tag);

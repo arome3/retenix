@@ -17,6 +17,7 @@
     "zod": "^4"
   },
   "devDependencies": {
+    "@types/node": "^22",
     "typescript": "^5",
     "viem": "^2",
     "vitest": "^4"

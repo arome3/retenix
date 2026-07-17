@@ -91,17 +91,18 @@ describe("escrow envelope (doc 14, TS-14.3)", () => {
     // a fake "KMS": wraps the DEK by XOR with a fixed pad — enough to prove
     // the envelope layer treats the provider as opaque
     const pad = Buffer.alloc(32, 0x5a);
+    const xor = (bytes: Buffer): Buffer => {
+      const out = Buffer.alloc(bytes.length);
+      for (let i = 0; i < bytes.length; i++) out[i] = bytes[i]! ^ pad[i % pad.length]!;
+      return out;
+    };
     const fakeKms: EscrowKeyProvider = {
       kind: "kms",
       generateDataKey: () => {
         const dek = Buffer.from(Array.from({ length: 32 }, (_, i) => i * 7 + 1));
-        return Promise.resolve({
-          plaintextKey: Buffer.from(dek),
-          encryptedKey: Buffer.from(dek.map((b, i) => b ^ pad[i]!)),
-        });
+        return Promise.resolve({ plaintextKey: Buffer.from(dek), encryptedKey: xor(dek) });
       },
-      decryptDataKey: (enc) =>
-        Promise.resolve(Buffer.from(Buffer.from(enc).map((b, i) => b ^ pad[i]!))),
+      decryptDataKey: (enc) => Promise.resolve(xor(enc)),
     };
     const blob = await encryptEnvelope(fakeKms, CTX, "via kms shape");
     expect(parseEnvelope(blob).kind).toBe("kms");
