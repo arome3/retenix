@@ -75,6 +75,7 @@ export async function deleteTestUser(user: TestUser): Promise<void> {
   await db().query("delete from portfolio_snapshots where user_id = $1", [
     user.userId,
   ]);
+  await db().query("delete from estates where user_id = $1", [user.userId]);
   await db().query("delete from users where id = $1", [user.userId]);
 }
 
@@ -106,6 +107,10 @@ export async function sweepTestUsers(): Promise<number> {
   );
   await db().query(
     `delete from portfolio_snapshots
+      where user_id in (select id from users where email_hash like '0xe2e%')`,
+  );
+  await db().query(
+    `delete from estates
       where user_id in (select id from users where email_hash like '0xe2e%')`,
   );
   const { rowCount } = await db().query(

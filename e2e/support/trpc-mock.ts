@@ -29,6 +29,10 @@ export const emptyPortfolioMocks: Record<string, Handler> = {
   "portfolio.chart": () => ({ points: [], asOf: new Date().toISOString() }),
   "portfolio.topUpPrompt": () => null,
   "activity.feed": () => ({ items: [] }),
+  // doc 14: C8 polls estate.status from the (app) LAYOUT, so it rides the
+  // first batch of every authed screen — same un-mocking hazard as the
+  // portfolio queries. Not-enrolled is the empty, honest statement.
+  "estate.status": () => ({ enrolled: false, view: null }),
 };
 
 export async function mockTrpc(
@@ -36,6 +40,11 @@ export async function mockTrpc(
   handlers: Record<string, Handler>,
   opts: { delayMs?: number } = {},
 ): Promise<void> {
+  // doc 14: the (app) LAYOUT queries estate.status (C8), so it can ride ANY
+  // authed screen's batch — an unhandled layout query would un-mock whole
+  // batches spec-by-spec. Default it here (not-enrolled), overridable by
+  // specs that drive the banner.
+  handlers = { "estate.status": () => ({ enrolled: false, view: null }), ...handlers };
   await page.route("**/api/trpc/**", async (route) => {
     const url = new URL(route.request().url());
     const procedures = url.pathname
