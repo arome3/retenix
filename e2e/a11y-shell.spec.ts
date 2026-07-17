@@ -56,9 +56,11 @@ test("keyboard walk: tab order Home→Activity→Agents→Profile", async ({
   // Header money affordances (doc 06: the hero amount — and, when funded, the
   // source pill — open the breakdown sheet) sit in source order before the tab
   // bar. Walk through them, then require the four tabs in strict order.
+  // Budget: 8 → 10 for doc 15's single ⋯ overflow trigger (its items join the
+  // tab order only while open); the strict LABEL ORDER is the invariant.
   const labels = ["Home", "Activity", "Agents", "Profile"];
   let next = 0;
-  for (let i = 0; i < 8 && next < labels.length; i++) {
+  for (let i = 0; i < 10 && next < labels.length; i++) {
     await page.keyboard.press("Tab");
     const text = (await page.locator(":focus").textContent())?.trim() ?? "";
     if (text === labels[next]) {
