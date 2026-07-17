@@ -296,3 +296,54 @@ export const estateClaimedReceipt = (sourceCount: number): string =>
   sourceCount === 1
     ? "Your estate was claimed — assets moved to your beneficiary from 1 source."
     : `Your estate was claimed — assets moved to your beneficiary from ${sourceCount} sources.`;
+
+// --- send / withdraw receipts (module 15; doc 15's sender/recipient wordings
+// --- are PROPOSED via these shared templates — implemented verbatim) ---
+
+/**
+ * Sender-side receipt (event send.receipt). Doc 15 sample:
+ * "Sent $20.00 to ana@… · fees $0.05 · view onchain". `toDisplay` is the
+ * masked email / ENS name / truncated address the user sent to — addresses
+ * are sanctioned in receipts (DS-9.3).
+ */
+export function sentReceipt(e: {
+  usd: number;
+  toDisplay: string;
+  fees: FeeTotalsUSD;
+}): string {
+  return `Sent ${fmtUsd(e.usd)} to ${e.toDisplay} · fees ${fmtUsd(e.fees.total)} · view onchain`;
+}
+
+/** Recipient-side system receipt (event send.received). Doc 15 sample:
+ *  "Received $20.00 from mark@…". `fromDisplay` is always the MASKED sender
+ *  email (verified against the sender's email_hash before it is stored). */
+export const receivedReceipt = (usd: number, fromDisplay: string): string =>
+  `Received ${fmtUsd(usd)} from ${fromDisplay}`;
+
+/**
+ * Withdraw receipt (event send.receipt, withdraw flow). Names the destination
+ * network — receipts may name networks (doc 01 exceptions; CONFLICTS #16 is
+ * about the CHOICE surface, which is the withdraw screen itself). PROPOSED
+ * wording. Sample: "Withdrew $2.00 of USDC to 0x1234…abcd on Arbitrum ·
+ * fees $0.05 · view onchain".
+ */
+export function withdrawReceipt(e: {
+  usd: number;
+  symbol: string;
+  toDisplay: string;
+  network: string;
+  fees: FeeTotalsUSD;
+}): string {
+  // copy-canon-allow (receipt context — the scanner lives outside packages but the discipline is kept)
+  return `Withdrew ${fmtUsd(e.usd)} of ${e.symbol} to ${e.toDisplay} on ${e.network} · fees ${fmtUsd(e.fees.total)} · view onchain`;
+}
+
+/** Send failed-with-refund reuses doc-08's refundedReceipt wording; the
+ *  never-left variant is honest for exhausted/failed sends (PROPOSED). */
+export const sendFailedReceipt = (usd: number, toDisplay: string): string =>
+  `Didn't complete — your ${fmtUsd(usd)} send to ${toDisplay} never left your account`;
+
+/** Send submitted but unconfirmable within the poll ceiling (sweep's honesty
+ *  posture — never claims success, never claims refund). */
+export const sendUnverifiedReceipt = (usd: number, toDisplay: string): string =>
+  `Still settling — your ${fmtUsd(usd)} send to ${toDisplay} hasn't confirmed yet. We're checking on it.`;

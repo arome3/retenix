@@ -80,6 +80,8 @@ describe("eventVariant / eventSentence", () => {
       "execution.unresolved",
       "sweep.authorized",
       "sweep.dismissed",
+      "send.authorized",
+      "send.invited",
       "sig.nonce",
       "intent.parsed",
       "plan.autonomy_set",
@@ -115,6 +117,15 @@ describe("eventVariant / eventSentence", () => {
       }),
     ).toBe("Liquidated 4 of 5 positions to USDC · all agents revoked · 1 leg needs retry");
     expect(eventSentence("estate.checkin", { receipt: "Checked in." })).toBe("Checked in.");
+    // module 15's rows — sentence at payload.receipt like every non-sweep type
+    expect(
+      eventSentence("send.receipt", {
+        receipt: "Sent $20.00 to a•••@example.com · fees $0.05 · view onchain",
+      }),
+    ).toBe("Sent $20.00 to a•••@example.com · fees $0.05 · view onchain");
+    expect(
+      eventSentence("send.received", { receipt: "Received $20.00 from m•••@example.com" }),
+    ).toBe("Received $20.00 from m•••@example.com");
   });
 
   it("never fabricates: missing/non-string/empty sentence → null", () => {

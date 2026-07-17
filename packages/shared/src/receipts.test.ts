@@ -6,10 +6,15 @@ import {
   executedReceipt,
   fmtUsd,
   periodWord,
+  receivedReceipt,
   refundedReceipt,
   revokedReceipt,
+  sendFailedReceipt,
+  sendUnverifiedReceipt,
+  sentReceipt,
   skippedReceipt,
   unresolvedReceipt,
+  withdrawReceipt,
 } from "./receipts";
 
 // ---------------------------------------------------------------------------
@@ -203,5 +208,55 @@ describe("executedReceipt source handling", () => {
         fees: { gas: 0, service: 0, lp: 0, total: 0 },
       }),
     ).toContain("funded from your balance");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// send / withdraw receipts (module 15) — byte-pinned like every other family.
+// The sender/recipient samples mirror doc 15's own examples ("Sent $20.00 to
+// ana@… · fees $0.05 · view onchain" / "Received $20.00 from mark@…") with
+// masked-email displays (raw emails never persist — doc 14's maskEmail).
+// ---------------------------------------------------------------------------
+
+describe("send receipts (byte-exact)", () => {
+  const fees = { gas: 0.02, service: 0.02, lp: 0.01, total: 0.05 };
+
+  it("sender receipt — doc 15 sample shape", () => {
+    expect(sentReceipt({ usd: 20, toDisplay: "a•••@example.com", fees })).toBe(
+      "Sent $20.00 to a•••@example.com · fees $0.05 · view onchain",
+    );
+  });
+
+  it("sender receipt to a raw address renders it truncated (DS-9.3)", () => {
+    expect(sentReceipt({ usd: 2, toDisplay: "0x1234…abcd", fees })).toBe(
+      "Sent $2.00 to 0x1234…abcd · fees $0.05 · view onchain",
+    );
+  });
+
+  it("recipient receipt — doc 15 sample shape", () => {
+    expect(receivedReceipt(20, "m•••@example.com")).toBe(
+      "Received $20.00 from m•••@example.com",
+    );
+  });
+
+  it("withdraw receipt names the destination network (receipt context)", () => {
+    expect(
+      withdrawReceipt({
+        usd: 2,
+        symbol: "USDC",
+        toDisplay: "0x1234…abcd",
+        network: "Arbitrum",
+        fees,
+      }),
+    ).toBe("Withdrew $2.00 of USDC to 0x1234…abcd on Arbitrum · fees $0.05 · view onchain");
+  });
+
+  it("failed send is honest that nothing left; unverified never claims either way", () => {
+    expect(sendFailedReceipt(2, "a•••@example.com")).toBe(
+      "Didn't complete — your $2.00 send to a•••@example.com never left your account",
+    );
+    expect(sendUnverifiedReceipt(2, "a•••@example.com")).toBe(
+      "Still settling — your $2.00 send to a•••@example.com hasn't confirmed yet. We're checking on it.",
+    );
   });
 });
