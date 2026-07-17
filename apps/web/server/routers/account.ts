@@ -1,4 +1,4 @@
-import { users } from "@retenix/db";
+import { events, users } from "@retenix/db";
 import { getPrimaryAssets } from "@retenix/ua";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
@@ -92,5 +92,20 @@ export const accountRouter = router({
         .where(eq(users.id, ctx.session.userId));
 
       return { bootstrapped: true, uaEvm: eoa, uaSol: input.uaSol };
+    }),
+
+  // Theme-prefs mirror (doc 15 closes doc 01's registerThemeMirror TODO).
+  // The users schema is frozen (doc 00, byte-for-byte) — no prefs column —
+  // so the mirror is an audit-only events row (write-only in v1; localStorage
+  // stays the functional store; cross-device read-back flagged in HANDOFF).
+  setPrefs: protectedProcedure
+    .input(z.object({ mode: z.enum(["dark", "light"]), cvd: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.insert(events).values({
+        userId: ctx.session.userId,
+        type: "prefs.updated",
+        payloadJson: { mode: input.mode, cvd: input.cvd },
+      });
+      return { ok: true };
     }),
 });
