@@ -24,7 +24,6 @@
 //   owner holds; omitted → native-only claim), G4_HEIR (defaults to keeper).
 //
 // Run: pnpm --filter worker rehearse:g4
-/* eslint-disable no-console */
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";

@@ -129,6 +129,16 @@ function stubRelay(overrides: Partial<PlanRelay> = {}): PlanRelay & {
     verifyRevokeAll: () => true,
     revokeAll: async () => ({ txHash: "0xrevokeall" }),
     txStatus: async () => "confirmed" as const,
+    // module 14 surface — unused by plans.*, present to satisfy the interface
+    enrollEstate: async () => ({ txHash: "0xenroll" }),
+    checkIn: async () => ({ txHash: "0xcheckin" }),
+    estateOf: async () => ({
+      beneficiaryHash: `0x${"00".repeat(32)}`,
+      inactivitySecs: 0n,
+      lastCheckIn: 0n,
+      claimReadyAt: 0n,
+      status: 0,
+    }),
     ...overrides,
   };
   return Object.assign(relay, { calls });

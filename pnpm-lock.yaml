@@ -55,6 +55,9 @@ importers:
       '@ai-sdk/anthropic':
         specifier: ^4.0.11
         version: 4.0.11(zod@4.4.3)
+      '@aws-sdk/client-kms':
+        specifier: ^3
+        version: 3.1084.0
       '@magic-ext/evm':
         specifier: 1.7.0
         version: 1.7.0

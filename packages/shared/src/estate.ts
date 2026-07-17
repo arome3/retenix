@@ -127,6 +127,16 @@ export function normalizeBeneficiaryEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Display mask for a stored beneficiary email — module 10's legacy plan rows
+ *  carry the address plaintext in params_json; estate.enroll rewrites it to
+ *  this mask (doc 14: never plaintext at rest — the full address lives only
+ *  in the KMS envelope from then on). "jane@example.com" → "j•••@example.com". */
+export function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return "•••";
+  return `${email[0]}•••${email.slice(at)}`;
+}
+
 export function beneficiaryHashFor(email: string, salt: string): string {
   return keccak256(concat([toUtf8Bytes(normalizeBeneficiaryEmail(email)), getBytes(salt)]));
 }

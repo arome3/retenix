@@ -370,6 +370,10 @@ export async function runKill(
   ];
   void Promise.allSettled(settlements).then(() => onProgress?.({ stage: "done" }));
 
+  // doc 14: this session transacted — sends bump nonces, voiding any escrowed
+  // inheritance tuples. Restore coverage silently once settlement is rolling.
+  void import("@/lib/escrow").then((m) => m.scheduleTupleRefresh()).catch(() => {});
+
   return {
     killId,
     revoke: { state: res.revoke.state, txHash: res.revoke.txHash },

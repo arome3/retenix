@@ -234,5 +234,8 @@ export async function runSweep(
   onProgress?.({ stage: "reporting" });
   const receipt = await reportWithRetry(eoa, executionId, legs);
   clearPending();
+  // doc 14: this session transacted — every send bumped a nonce somewhere,
+  // voiding any escrowed inheritance tuples. Restore coverage silently.
+  void import("@/lib/escrow").then((m) => m.scheduleTupleRefresh()).catch(() => {});
   return { kind: "receipt", receipt };
 }
