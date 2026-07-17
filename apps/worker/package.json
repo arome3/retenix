@@ -13,7 +13,8 @@
     "rehearse:failure": "tsx --env-file-if-exists=.env scripts/rehearse-failure.ts",
     "rehearse:g4": "tsx --env-file-if-exists=.env scripts/rehearse-g4.ts",
     "verify:nodup": "tsx --env-file-if-exists=.env scripts/verify-no-duplicates.ts",
-    "verify:kill": "tsx --env-file-if-exists=.env scripts/verify-kill.ts"
+    "verify:kill": "tsx --env-file-if-exists=.env scripts/verify-kill.ts",
+    "verify:estate": "tsx --env-file-if-exists=.env scripts/verify-estate.ts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3",

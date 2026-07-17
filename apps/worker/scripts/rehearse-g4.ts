@@ -17,11 +17,15 @@
 //      WITHOUT re-burning a tuple.
 //
 // Default mode spawns a local anvil (Prague hardfork) — no funds at risk.
-// Live mode (G7: mainnet, tiny balances) runs against a real chain:
+// Live mode (Sepolia rehearsal, or mainnet under G7's tiny-balance budget)
+// runs against a real chain:
 //   G4_RPC_URL, G4_KEEPER_PRIVATE_KEY (must be the delegate's keeper),
-//   G4_OWNER_PRIVATE_KEY (a throwaway with a few cents of gas),
-//   G4_CLAIM_DELEGATE (deployed RetenixClaim), optional G4_TOKEN (ERC-20 the
-//   owner holds; omitted → native-only claim), G4_HEIR (defaults to keeper).
+//   G4_CLAIM_DELEGATE (deployed RetenixClaim). Owners are FRESH random
+//   wallets funded by the keeper (G4_FUND_ETH each, default 0.002) — the
+//   nonce story needs virgin accounts. Optional: G4_TOKEN (an ERC-20 the
+//   owner would hold; omitted → native-only claim), G4_HEIR (defaults to a
+//   fresh random address so the sweep assertion isn't polluted by the
+//   keeper's own gas spend).
 //
 // Run: pnpm --filter worker rehearse:g4
 import { spawn, type ChildProcess } from "node:child_process";
@@ -35,6 +39,7 @@ import {
   NonceManager,
   Signature,
   Wallet,
+  getBytes,
   parseEther,
   type Authorization,
   type TransactionReceipt,
@@ -44,7 +49,14 @@ import {
   devEscrowProvider,
   encryptEnvelope,
 } from "@retenix/shared/escrow";
-import { escrowTupleSchema, type EscrowTuple } from "@retenix/shared";
+import {
+  RETENIX_POLICY_ABI,
+  beneficiaryHashFor,
+  enrollEstateDigest,
+  escrowTupleSchema,
+  estateStatusName,
+  type EscrowTuple,
+} from "@retenix/shared";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ANVIL_PORT = 8547;
@@ -183,7 +195,6 @@ async function setupLive(): Promise<Env> {
   const provider = new JsonRpcProvider(rpc);
   const keeperWallet = new Wallet(workerEnv.G4_KEEPER_PRIVATE_KEY!, provider);
   const keeper = new NonceManager(keeperWallet);
-  const owner = new Wallet(workerEnv.G4_OWNER_PRIVATE_KEY!, provider);
   const claimDelegate = workerEnv.G4_CLAIM_DELEGATE!;
   const claimArt = artifact("RetenixClaim.sol", "RetenixClaim");
   const tokenAddr = workerEnv.G4_TOKEN;
@@ -191,32 +202,36 @@ async function setupLive(): Promise<Env> {
     "function balanceOf(address) view returns (uint256)",
     "function transfer(address,uint256) returns (bool)",
   ];
-  console.log(`\nLIVE mode — chain ${(await provider.getNetwork()).chainId} (G7: tiny balances)`);
+  console.log(`\nLIVE mode — chain ${(await provider.getNetwork()).chainId} (tiny balances)`);
   return {
     provider,
     keeper,
     keeperAddress: keeperWallet.address,
-    heir: workerEnv.G4_HEIR ?? keeperWallet.address,
+    heir: workerEnv.G4_HEIR ?? Wallet.createRandom().address,
     claimDelegate,
     claimAbi: claimArt.abi,
     token: tokenAddr ? new Contract(tokenAddr, erc20Abi, provider) : null,
     canMint: false,
-    fundOwner: async () => {}, // live owner is pre-funded by the operator
+    // keeper funds each fresh owner (the nonce story needs virgin accounts)
+    fundOwner: async (owner, eth) => {
+      void eth; // live amounts come from G4_FUND_ETH, never the anvil figures
+      const amount = parseEther(workerEnv.G4_FUND_ETH ?? "0.002");
+      await waitReceipt(provider, (await keeper.sendTransaction({ to: owner, value: amount })).hash);
+    },
     anvil: null,
     live: true,
-    ownerForHappyPath: owner,
-    // live mode reuses the ONE funded owner for every scenario, sequentially
-    freshOwner: () => owner,
+    ownerForHappyPath: new Wallet(Wallet.createRandom().privateKey, provider),
+    freshOwner: () => new Wallet(Wallet.createRandom().privateKey, provider),
   };
 }
 
 async function main(): Promise<number> {
   const live = Boolean(process.env.G4_RPC_URL);
   if (live) {
-    for (const k of ["G4_KEEPER_PRIVATE_KEY", "G4_OWNER_PRIVATE_KEY", "G4_CLAIM_DELEGATE"]) {
+    for (const k of ["G4_KEEPER_PRIVATE_KEY", "G4_CLAIM_DELEGATE"]) {
       if (!process.env[k]) {
         console.log(`rehearse-g4: G4_RPC_URL is set but ${k} is missing — owner-action:`);
-        console.log("  set G4_KEEPER_PRIVATE_KEY / G4_OWNER_PRIVATE_KEY / G4_CLAIM_DELEGATE");
+        console.log("  set G4_KEEPER_PRIVATE_KEY / G4_CLAIM_DELEGATE");
         console.log("  (keeper must be the deployed delegate's immutable keeper)");
         return 0;
       }
@@ -236,6 +251,45 @@ async function main(): Promise<number> {
     console.log("— happy path: sign → escrow round-trip → Type-4 apply+register → claim");
     const owner1 = env.ownerForHappyPath;
     await env.fundOwner(owner1.address, "0.2");
+
+    // A policy-gated delegate (Arbitrum posture) refuses registerHeir until
+    // the SAME-CHAIN estate is Claimable/Claimed — so a live rehearsal first
+    // drives the real estate lifecycle: enroll → deadline → window →
+    // markClaimed. This exercises the exact production order (markClaimed is
+    // the commit point; the delegate accepts the resulting Claimed state).
+    const policyAddr = (await new Contract(claimDelegate, claimAbi, provider).policy()) as string;
+    if (policyAddr !== "0x0000000000000000000000000000000000000000") {
+      console.log(`  delegate is policy-gated (${policyAddr}) — driving the estate lifecycle`);
+      const policy = new Contract(policyAddr, RETENIX_POLICY_ABI, env.keeper);
+      const policyReader = new Contract(policyAddr, RETENIX_POLICY_ABI, provider);
+      const authNonce = (await policyReader.authNonces(owner1.address)) as bigint;
+      const beneficiaryHash = beneficiaryHashFor("g4-heir@example.com", `0x${"ab".repeat(32)}`);
+      const inactivitySecs = 5n;
+      const digest = enrollEstateDigest(
+        { chainId, contract: policyAddr },
+        { beneficiaryHash, inactivitySecs, nonce: authNonce },
+      );
+      const ownerSig = await owner1.signMessage(getBytes(digest));
+      await waitReceipt(provider, (await policy.enrollEstate(
+        owner1.address, beneficiaryHash, inactivitySecs, authNonce, ownerSig,
+      )).hash);
+      check("estate enrolled onchain (owner-signed, keeper-relayed)", true);
+
+      await new Promise((r) => setTimeout(r, 7_000)); // let the 5s window lapse
+      await waitReceipt(provider, (await policy.fireDeadline(owner1.address)).hash);
+      const windowSecs = Number((await policyReader.challengeWindowSecs()) as bigint);
+      console.log(`  DeadlineFired — waiting out the ${windowSecs}s challenge window…`);
+      let statusName = "";
+      for (let i = 0; i < windowSecs + 60; i++) {
+        statusName = estateStatusName(Number((await policyReader.estateStatus(owner1.address)) as bigint));
+        if (statusName === "claimable") break;
+        await new Promise((r) => setTimeout(r, 2_000));
+      }
+      check("estate reads Claimable after the challenge window", statusName === "claimable");
+      await waitReceipt(provider, (await policy.markClaimed(owner1.address, heir)).hash);
+      check("markClaimed landed (the commit point — status now Claimed)",
+        estateStatusName(Number((await policyReader.estateStatus(owner1.address)) as bigint)) === "claimed");
+    }
     if (env.token && env.canMint) {
       await waitReceipt(provider, (await (env.token.connect(keeper) as Contract).mint(owner1.address, 1_500_000n)).hash);
     }
@@ -280,7 +334,7 @@ async function main(): Promise<number> {
     // ---------------- 2. SELF-INVALIDATION ----------------
     console.log("\n— self-invalidation: nonce bump voids the escrowed tuple (silently!)");
     const owner2 = env.freshOwner();
-    if (!env.live) await env.fundOwner(owner2.address, "0.1");
+    await env.fundOwner(owner2.address, "0.1");
     const nonce2 = await provider.getTransactionCount(owner2.address);
     const auth2 = await owner2.authorize({ address: claimDelegate, nonce: nonce2, chainId });
     const [stored2] = await escrowRoundTrip(owner2.address, [toTuple(auth2)]);
