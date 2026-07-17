@@ -2,12 +2,20 @@
 // mainnet buy. Validates the PINNED MINT + UA ROUTING together — the single
 // biggest demo risk (OQ7 / TS-17.7).
 //
+// DOUBLES AS GATE G-R1 (doc 20) for tokenized gold: run with G2_BUY_ID=paxg
+// (`pnpm --filter @retenix/registry buy:gr1`) to prove the pinned PAXG contract
+// routes on Ethereum mainnet. G-R3: PAXG's on-chain transfer fee is currently
+// ZERO (Paxos disabled it), so received should ≈ quoted — but the mechanism can
+// be re-enabled, so the owner MUST confirm received-vs-quoted within tolerance
+// from the logged tx detail (the received-amount field is unfrozen in 2.0.3).
+//
 // Backend signing flow (walletSigner + a capped dev key), mirroring
 // packages/ua/scripts/smoke.ts:
-//   REGISTRY.find(spyx) → createBuyTransaction → parseFeeTotals → signAndSend →
-//   pollToTerminal → assert FINISHED and the pinned mint is in the tx detail.
+//   REGISTRY.find(id) → createBuyTransaction → parseFeeTotals → signAndSend →
+//   pollToTerminal → assert FINISHED and the pinned address is in the tx detail.
 //
-// Run:  pnpm --filter @retenix/registry buy:g2
+// Run:  pnpm --filter @retenix/registry buy:g2   (SPYx / gate G2)
+//       pnpm --filter @retenix/registry buy:gr1  (PAXG / gate G-R1, doc 20)
 // Env (canonical names, doc 00): PARTICLE_PROJECT_ID / PARTICLE_CLIENT_KEY /
 //   PARTICLE_APP_UUID, SMOKE_WALLET_PRIVATE_KEY (capped $50 wallet, dev-only).
 //   Optional: G2_BUY_USD (default "5"), G2_BUY_ID (default "spyx").
@@ -46,16 +54,23 @@ function required(name: string): string {
 }
 
 async function main(): Promise<number> {
+  const targetId = process.env.G2_BUY_ID ?? "spyx";
+  const isGold = targetId === "paxg" || targetId === "xaut";
+  const tag = isGold ? "G-R1" : "g2";
   const missing = REQUIRED.filter((name) => !process.env[name]);
   if (missing.length > 0) {
+    const buyDesc = isGold
+      ? `the $${process.env.G2_BUY_USD ?? "5"} PAXG mainnet buy is a flagged owner-action (G-R1, doc 20)`
+      : "the $5 SPYx mainnet buy is a flagged owner-action (OQ7 / TS-17.7)";
     console.log(
       [
-        "[g2] SKIPPED — the $5 SPYx mainnet buy is a flagged owner-action (OQ7 / TS-17.7),",
-        "[g2] the single biggest demo risk. This is NOT a package failure.",
-        `[g2] Missing env: ${missing.join(", ")}.`,
-        "[g2] Set PARTICLE_* + SMOKE_WALLET_PRIVATE_KEY (capped $50 wallet) to execute.",
-        "[g2] On routing failure, activate the PS-11.2 fallback (SOL/USDC + a mocked,",
-        "[g2] honestly-labeled ticker) and ask Particle Telegram about the routing whitelist.",
+        `[${tag}] SKIPPED — ${buyDesc},`,
+        `[${tag}] the single biggest demo risk. This is NOT a package failure.`,
+        `[${tag}] Missing env: ${missing.join(", ")}.`,
+        `[${tag}] Set PARTICLE_* + SMOKE_WALLET_PRIVATE_KEY (capped $50 wallet) to execute.`,
+        isGold
+          ? `[${tag}] G-R3: confirm received-vs-quoted within tolerance; drop XAUT silently if routing fails (PAXG suffices).`
+          : `[${tag}] On routing failure, activate the PS-11.2 fallback (SOL/USDC + a mocked, honestly-labeled ticker).`,
       ].join("\n"),
     );
     return 0; // absence is expected, not a failure
@@ -75,9 +90,16 @@ async function main(): Promise<number> {
     console.error(`[g2] no registry asset with id "${id}"`);
     return 1;
   }
+  const gate = asset.kind === "rwa-gold" ? "G-R1" : "G2";
   console.log(
-    `[g2] target ${asset.ticker} — pinned mint ${asset.address} (chain ${asset.chainId})`,
+    `[${gate}] target ${asset.ticker} — pinned address ${asset.address} (chain ${asset.chainId})`,
   );
+  if (asset.kind === "rwa-gold") {
+    console.log(
+      "[G-R1] gold buy (doc 20). G-R3: confirm received-vs-quoted within tolerance " +
+        "from the tx detail below — PAXG's on-chain fee is currently zero, but verify.",
+    );
+  }
 
   const ua = createUa({ ownerAddress: wallet.address, credentials });
   const addrs = await getAddresses(ua);

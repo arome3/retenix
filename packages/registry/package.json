@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc -b",
     "buy:g2": "tsx scripts/buy-g2.ts",
+    "buy:gr1": "G2_BUY_ID=paxg G2_BUY_USD=5 tsx scripts/buy-g2.ts",
     "gen:vectors": "tsx scripts/gen-policy-vectors.ts"
   },
   "dependencies": {

@@ -34,4 +34,16 @@ describe("assetListHash (keccak of sorted allowed ids, TS-6.2)", () => {
   it("the pipe delimiter prevents concatenation collisions: ['ab'] !== ['a','b']", () => {
     expect(assetListHash(["ab"])).not.toBe(assetListHash(["a", "b"]));
   });
+
+  it("a gold-containing basket folds paxg into the allowlist preimage (doc 20)", () => {
+    // The Guardian allowlist covers a mixed basket only if gold participates in
+    // the hash the owner signs. assetListHash is asset-agnostic, so adding paxg
+    // changes the hash (it is part of the set) — never collides with the
+    // gold-less basket, and stays order-insensitive.
+    const withGold = assetListHash(["spyx", "paxg", "sol"]);
+    const withoutGold = assetListHash(["spyx", "sol"]);
+    expect(withGold).not.toBe(withoutGold);
+    expect(withGold).toBe(assetListHash(["sol", "spyx", "paxg"])); // order-insensitive
+    expect(assetIdHash("paxg")).toMatch(/^0x[0-9a-f]{64}$/);
+  });
 });
