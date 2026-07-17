@@ -238,6 +238,7 @@ export const estateRouter = router({
         userId: ctx.session.userId,
         type: ESTATE_EVENTS.enrolled,
         payloadJson: {
+          kind: "legacy",
           receipt: estateEnrolledReceipt(),
           txHash,
           inactivitySecs,
@@ -320,6 +321,7 @@ export const estateRouter = router({
         userId: ctx.session.userId,
         type: ESTATE_EVENTS.checkin,
         payloadJson: {
+          kind: "legacy",
           receipt: estateCheckinButtonReceipt(cancelledCountdown),
           source: "im-here",
           cancelledCountdown,

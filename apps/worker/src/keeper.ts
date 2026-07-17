@@ -265,6 +265,7 @@ export async function runClaimSequence(
 
   const claimedChains = results.filter((r) => r.state === "claimed");
   await recordEvent(deps.db, ESTATE_EVENTS.claimed, estate.userId, {
+    kind: "legacy",
     receipt: estateClaimedReceipt(claimedChains.length),
     sourceCount: claimedChains.length,
     heirEoa,

@@ -121,6 +121,7 @@ export async function observeOwner(
   // countdown observation (C8's backend truth) — record once per transition
   if ((statusName === "countdown" || statusName === "claimable") && cache.status === "enrolled") {
     await recordEvent(deps.db, ESTATE_EVENTS.countdownStarted, estate.userId, {
+      kind: "legacy",
       receipt: estateCountdownStartedReceipt(),
       claimReadyAt: new Date(Number(chain.claimReadyAt) * 1000).toISOString(),
     });
@@ -141,6 +142,7 @@ export async function observeOwner(
         relayed = true;
         watermark = new Date(newest).toISOString();
         await recordEvent(deps.db, ESTATE_EVENTS.checkin, estate.userId, {
+          kind: "legacy",
           receipt: estateCheckinObservedReceipt("your account"),
           source: "observed",
           txHash,

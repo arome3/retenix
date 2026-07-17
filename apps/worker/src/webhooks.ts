@@ -85,6 +85,7 @@ export async function handleAddressActivity(deps: WebhookDeps, body: unknown): P
     if (!touched.has(estate.owner.toLowerCase())) continue;
     matched += 1;
     await recordEvent(deps.db, ESTATE_EVENTS.activityNoticed, estate.userId, {
+      kind: "legacy",
       receipt: estateActivityNoticedReceipt(network),
       network,
     });

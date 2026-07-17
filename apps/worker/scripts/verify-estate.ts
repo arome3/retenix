@@ -24,7 +24,7 @@ import {
 } from "@retenix/shared";
 import { parseEnvelope } from "@retenix/shared/escrow";
 import { createUa, getPrimaryAssets } from "@retenix/ua";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { Contract, JsonRpcProvider } from "ethers";
 import { env } from "../env";
 import { ownerAction, particleReady } from "./lib";
