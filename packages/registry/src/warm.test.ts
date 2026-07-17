@@ -21,12 +21,15 @@ describe("warmRegistry (TS-5.6, non-fatal token warming)", () => {
     expect(warmUpToken).toHaveBeenCalledTimes(eligibleAssets("DE").length);
   });
 
-  it("passes the { chainId, address } IBasicToken shape (restricted region → SOL+ETH)", async () => {
+  it("passes the { chainId, address } IBasicToken shape (equity-restricted region → SOL+ETH+gold)", async () => {
     const { ua, warmUpToken } = makeUa();
     await warmRegistry(ua, "US");
+    // Doc 20: a US user gets crypto + gold (no equities). PAXG follows ETH in
+    // registry order and warms with its real ERC-20 address (not the sentinel).
     expect(warmUpToken.mock.calls.map((c) => c[0])).toEqual([
       { chainId: 101, address: "0x0000000000000000000000000000000000000000" },
       { chainId: 1, address: "0x0000000000000000000000000000000000000000" },
+      { chainId: 1, address: "0x45804880De22913dAFE09f4980848ECE6EcbAf78" },
     ]);
   });
 

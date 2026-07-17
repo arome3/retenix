@@ -7,7 +7,9 @@ import {
   isEquityEligible,
   isGatePassed,
   isQuizAllCorrect,
+  isSanctioned,
   isValidRegion,
+  SANCTIONED_REGIONS,
 } from "./compliance";
 
 describe("isEquityEligible", () => {
@@ -100,6 +102,60 @@ describe("registry filter semantics (the contract module 05 consumes)", () => {
         !(EQUITY_RESTRICTED_REGIONS as readonly string[]).includes(region),
     ).map((a) => a.sym);
     expect(eligibleAssets(region)).toEqual(verbatim);
+  });
+});
+
+describe("RWA-gold eligibility (NON_SANCTIONED tier, doc 20 / OQ-R2)", () => {
+  // A three-class stand-in: equity (NON_RESTRICTED), crypto (ALL), gold
+  // (NON_SANCTIONED). Proves the US-fallback upgrade — a US user sees gold +
+  // crypto but NOT equities — while sanctioned regions get neither gold nor equities.
+  const REGISTRY: { sym: string; eligibleRegions: AssetEligibility }[] = [
+    { sym: "SPYx", eligibleRegions: "NON_RESTRICTED" },
+    { sym: "SOL", eligibleRegions: "ALL" },
+    { sym: "ETH", eligibleRegions: "ALL" },
+    { sym: "PAXG", eligibleRegions: "NON_SANCTIONED" },
+  ];
+  const eligibleAssets = (region: string) =>
+    REGISTRY.filter((a) => isAssetEligibleInRegion(a.eligibleRegions, region)).map(
+      (a) => a.sym,
+    );
+
+  it("the sanctioned set is exactly the proposed four (owner reviews the final list)", () => {
+    expect([...SANCTIONED_REGIONS]).toEqual(["CU", "IR", "KP", "SY"]);
+  });
+
+  it("isSanctioned matches the set and nothing else", () => {
+    for (const r of ["CU", "IR", "KP", "SY"]) expect(isSanctioned(r)).toBe(true);
+    for (const r of ["US", "CA", "GB", "AU", "DE", "NG", ""])
+      expect(isSanctioned(r)).toBe(false);
+  });
+
+  it("a US user sees gold + crypto but NEVER an equity (the fallback upgrade)", () => {
+    expect(eligibleAssets("US")).toEqual(["SOL", "ETH", "PAXG"]);
+    // The equity block list is unchanged — gold does not soften it.
+    expect(eligibleAssets("US")).not.toContain("SPYx");
+  });
+
+  it("a non-restricted region sees all three classes", () => {
+    expect(eligibleAssets("DE")).toEqual(["SPYx", "SOL", "ETH", "PAXG"]);
+  });
+
+  it("gold (and ONLY gold) is withheld in a sanctioned region", () => {
+    // Honest composed behavior to flag for the compliance owner: equities ride
+    // the SEPARATE 4-country NON_RESTRICTED list (US/CA/GB/AU), so a sanctioned
+    // region that is not one of those four still sees equities — only the
+    // NON_SANCTIONED (gold) tier withholds here. Whether equities should ALSO be
+    // sanction-gated is a doc-04 decision, out of module 20's scope.
+    for (const region of ["IR", "KP", "CU", "SY"]) {
+      expect(eligibleAssets(region)).not.toContain("PAXG");
+      expect(eligibleAssets(region)).toContain("SOL"); // crypto floor unaffected
+    }
+  });
+
+  it("gold is independent of the equity block — US (equity-blocked) still gets it", () => {
+    // NON_SANCTIONED ignores EQUITY_RESTRICTED_REGIONS entirely.
+    expect(isAssetEligibleInRegion("NON_SANCTIONED", "US")).toBe(true);
+    expect(isAssetEligibleInRegion("NON_RESTRICTED", "US")).toBe(false);
   });
 });
 

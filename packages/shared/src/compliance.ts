@@ -29,22 +29,49 @@ export function isEquityEligible(region: string): boolean {
 }
 
 /**
- * A registry entry's regional availability. Equities carry "NON_RESTRICTED";
- * SOL/ETH (and any always-available asset) carry "ALL". Exported so module 05's
- * registry types import this union rather than redeclaring it.
+ * Regions where even non-equity RWAs (tokenized gold, doc 20) are withheld —
+ * the comprehensively-embargoed jurisdictions. Distinct from the *equity* block
+ * list above: gold is not a Reg-S equity wrapper, so it reaches far more regions
+ * (incl. US/CA/GB/AU) — but not sanctioned ones.
+ *
+ * ⚠ PROPOSED default (OQ-R2, doc 20) — the compliance owner sets the final list;
+ * this is "everywhere except sanctioned lists" implemented as real code, not a
+ * comment. HONEST LIMIT to flag: the region model is self-attested ISO 3166-1
+ * alpha-2, so sub-national programs (Crimea, DNR/LNR, etc.) are NOT representable
+ * here — that is a model limitation, not an oversight. Equity sanctions remain a
+ * SEPARATE doc-04 concern; EQUITY_RESTRICTED_REGIONS is unchanged by module 20.
  */
-export type AssetEligibility = "ALL" | "NON_RESTRICTED";
+export const SANCTIONED_REGIONS = ["CU", "IR", "KP", "SY"] as const;
+export type SanctionedRegion = (typeof SANCTIONED_REGIONS)[number];
+
+/** true iff the region is on the comprehensively-sanctioned list (RWA withheld). */
+export function isSanctioned(region: string): boolean {
+  return (SANCTIONED_REGIONS as readonly string[]).includes(region);
+}
+
+/**
+ * A registry entry's regional availability (doc 04 / doc 20):
+ *   - "ALL"           — SOL/ETH and any always-available asset (every region).
+ *   - "NON_RESTRICTED" — tokenized equities: blocked in US/CA/GB/AU.
+ *   - "NON_SANCTIONED" — tokenized gold (rwa-gold): everywhere except sanctioned.
+ * Exported so module 05's registry types import this union rather than redeclaring it.
+ */
+export type AssetEligibility = "ALL" | "NON_RESTRICTED" | "NON_SANCTIONED";
 
 /**
  * The verbatim filter semantics module 05 applies, as a helper:
  *   REGISTRY.filter(a => isAssetEligibleInRegion(a.eligibleRegions, region))
- * === REGISTRY.filter(a => a.eligibleRegions === "ALL" || !EQUITY_RESTRICTED_REGIONS.includes(region))
+ * "ALL" is visible everywhere; "NON_RESTRICTED" rides the equity block list;
+ * "NON_SANCTIONED" (gold) is visible everywhere but the sanctioned list — so a
+ * US user sees gold + crypto while equities stay blocked (doc 20 US-fallback upgrade).
  */
 export function isAssetEligibleInRegion(
   eligibility: AssetEligibility,
   region: string,
 ): boolean {
-  return eligibility === "ALL" || isEquityEligible(region);
+  if (eligibility === "ALL") return true;
+  if (eligibility === "NON_SANCTIONED") return !isSanctioned(region);
+  return isEquityEligible(region); // "NON_RESTRICTED"
 }
 
 // ---------------------------------------------------------------------------

@@ -27,12 +27,13 @@ export const PORTFOLIO_HOLDINGS_CACHE_TTL_MS = 30_000;
 // Types
 // ---------------------------------------------------------------------------
 
-/** The registry slice this module needs — callers pass REGISTRY entries. */
+/** The registry slice this module needs — callers pass REGISTRY entries.
+ *  `kind` mirrors the registry union (doc 20 added "rwa-gold"). */
 export interface PortfolioAssetMeta {
   id: string;
   ticker: string;
   name: string;
-  kind: "equity" | "crypto";
+  kind: "equity" | "crypto" | "rwa-gold";
   chainId: number;
   address: string;
   disclosure?: string;

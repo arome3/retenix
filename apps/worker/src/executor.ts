@@ -38,6 +38,7 @@ import {
   executedReceipt,
   extractFillQty,
   extractFundingSources,
+  quoteFeeFloorUsd,
   refundedReceipt,
   revokedReceipt,
   skippedReceipt,
@@ -448,10 +449,13 @@ class LegRun {
     const fees = parseFeeTotals(tx);
 
     // Step 3c — quote integrity + slippage sanity (PROPOSED bound: fees ≤
-    // max($0.50, 5% of leg); tradeConfig slippage stays pinned at 100 bps
-    // in @retenix/ua and is never widened) + buying power (PS-F4.4).
+    // max(chain-floor, 5% of leg); the floor is per-chain — a $5 gold leg on
+    // Ethereum legitimately costs more gas than the $0.50 Solana-era flat
+    // (doc 20). tradeConfig slippage stays pinned at 100 bps in @retenix/ua and
+    // is never widened) + buying power (PS-F4.4).
     const rootHash = (tx as { rootHash?: unknown }).rootHash;
-    const feeCeiling = Math.max(0.5, this.leg.usd * 0.05);
+    const legChainId = REGISTRY.find((a) => a.id === this.leg.assetId)?.chainId ?? 0;
+    const feeCeiling = Math.max(quoteFeeFloorUsd(legChainId), this.leg.usd * 0.05);
     if (typeof rootHash !== "string" || rootHash.length === 0 || fees.total > feeCeiling) {
       breadcrumb("step3:quote-sanity-failed", { fees: fees.total, feeCeiling });
       return this.failAttempt("quote-sanity", { refund: opts.skipRecord });

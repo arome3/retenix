@@ -34,6 +34,7 @@ import {
   sellFillFromEvent,
   SOLANA_TOKEN_PROGRAMS,
   sparkFromSnapshots,
+  type BasisEntry,
   type MarksSource,
   type PortfolioHolding,
   type PortfolioTotals,
@@ -168,15 +169,32 @@ export async function enumeratePositions(
   for (const [assetId, balance] of chain) {
     positions.push({ assetId, qty: balance.qty, qtyHuman: balance.qtyHuman });
   }
-  // SOL/ETH: ledger-known net quantity only. A poisoned ledger cannot STATE a
-  // quantity, so it renders nothing rather than a guess (doc 12 §failure modes).
-  for (const assetId of ["sol", "eth"]) {
-    const entry = ledger.get(assetId);
+  positions.push(...ledgerTrackedPositions(ledger));
+  return { positions, fills };
+}
+
+/**
+ * Ledger-tracked investments: crypto natives (SOL/ETH) + tokenized gold
+ * (rwa-gold, doc 20) — the non-equity registry assets. Equities are chain-scanned
+ * (a real Solana balance); these EVM/native assets have no balance scan in v1, so
+ * their qty is the net execution-ledger quantity only. A poisoned ledger cannot
+ * STATE a quantity, so it renders nothing rather than a guess (doc 12 §failure
+ * modes). Deriving the id list from the registry means a new gold row enumerates
+ * without editing this function. Exported so the enumeration is unit-testable
+ * without a DB (doc 20 §step 4: assert, don't assume).
+ */
+export function ledgerTrackedPositions(
+  ledger: Map<string, BasisEntry>,
+): PositionInput[] {
+  const out: PositionInput[] = [];
+  for (const asset of REGISTRY) {
+    if (asset.kind === "equity") continue;
+    const entry = ledger.get(asset.id);
     if (entry && entry.basisKnown && entry.qty > QTY_EPSILON) {
-      positions.push({ assetId, qty: entry.qty, qtyHuman: String(entry.qty) });
+      out.push({ assetId: asset.id, qty: entry.qty, qtyHuman: String(entry.qty) });
     }
   }
-  return { positions, fills };
+  return out;
 }
 
 // ---------------------------------------------------------------------------

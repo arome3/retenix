@@ -15,17 +15,21 @@
 //     list is the real defense.
 import { validateRegistry } from "./validate";
 
-export type AssetKind = "equity" | "crypto";
+export type AssetKind = "equity" | "crypto" | "rwa-gold";
 export interface RegistryAsset {
   id: string; // REGISTRY_IDS member; lowercase ticker
   ticker: string; // display: "SPYx"
   name: string; // "S&P 500 (tokenized)"
   kind: AssetKind;
   chainId: number; // CHAIN_ID values (doc 03); equities are all 101
-  address: string; // SPL mint / native sentinel
-  eligibleRegions: "ALL" | "NON_RESTRICTED"; // doc 04 semantics
-  disclosure?: string; // equity only — the "token ≠ share" line
-  issuer?: "Backed"; // equity only
+  address: string; // SPL mint / native sentinel / ERC-20 contract
+  eligibleRegions: "ALL" | "NON_RESTRICTED" | "NON_SANCTIONED"; // doc 04/20 semantics
+  disclosure?: string; // equity + rwa-gold — the "token ≠ the underlying" line
+  issuer?: "Backed" | "Paxos" | "Tether"; // equity (Backed) + rwa-gold (Paxos/Tether)
+  // Informational only in v1: buys pass {chainId,address} to UA (which resolves
+  // real decimals via IToken.decimals — HANDOFF §15), and sell-all uses qtyHuman.
+  // Pinned for gold so the golden test can assert it (PAXG 18).
+  decimals?: number;
 }
 
 // Disclosure copy (PS-F8.3 pattern, "token ≠ share"). Data only — module 12
@@ -39,6 +43,10 @@ const stockDisclosure = (ticker: string, underlying: string) =>
   `${ticker} tracks ${underlying} stock. ${FIXED_CLAUSES}`;
 const etfDisclosure = (ticker: string, index: string) =>
   `${ticker} tracks the ${index} ETF. ${FIXED_CLAUSES}`;
+// Tokenized gold (doc 20, PS-F13-AC3) — the "token claim ≠ vault access" line.
+// VERBATIM (G12): "gold" is the sanctioned word; the string never says "RWA".
+const GOLD_DISCLOSURE =
+  "PAXG tracks physical gold held by Paxos. It is a token claim, not vault access. Issuer: Paxos.";
 
 export const REGISTRY: readonly RegistryAsset[] = [
   // ── Tokenized equities — xStocks SPL mints, Solana (101), issuer Backed ──
@@ -118,6 +126,40 @@ export const REGISTRY: readonly RegistryAsset[] = [
     chainId: 1,
     address: "0x0000000000000000000000000000000000000000",
     eligibleRegions: "ALL",
+  },
+
+  // ── Tokenized gold — RWA tier (doc 20, F13). A plain DEX-liquid ERC-20 on
+  //    Ethereum reached by the UNCHANGED createBuyTransaction pipeline. ──
+  //
+  // ⚠️  NO `Xs`-PREFIX TRIPWIRE EXISTS FOR ERC-20s (unlike xStocks mints): this
+  //     pinned address + issuer-page verification + the golden test are the
+  //     ENTIRE defense (G-R2). A registry PR changing it is security-review-
+  //     required and MUST re-run the verify-then-pin procedure + a G-R1 buy.
+  //
+  // PAXG · Pax Gold. VERIFIED 2026-07-17 against ≥2 independent issuer sources:
+  //   src1 (issuer, primary): Paxos-owned repo README —
+  //     github.com/paxosglobal/paxos-gold-contract ("Interaction with PAXG is
+  //     done at the address of the proxy at 0x45804880De22913dAFE09f4980848ECE6EcbAf78").
+  //   src2 (issuer-verified explorer): etherscan.io/token/0x45804880de22913dafe09f4980848ece6ecbaf78
+  //     — name "Paxos Gold", symbol PAXG, decimals 18, source-verified exact-match.
+  // G-R3 fee note: PAXG's contract HAS an on-chain fee mechanism (feeRate/feeParts),
+  //   historically ~0.02%, but Paxos set it to ZERO ("zero on-chain transfer fees",
+  //   2024) — so received≈quoted today. Paxos CAN re-enable it, so G-R1 still asserts
+  //   received-vs-quoted within tolerance rather than assuming parity.
+  // XAUT (Tether Gold) is DEFERRED — it enters only after a passing G-R1 (doc 20;
+  //   "PAXG alone suffices"). Its ready-to-pin address is in HANDOFF §20. The
+  //   DEPRECATED old XAUT (0x4922a015…) must NEVER be pinned — golden-test-guarded.
+  {
+    id: "paxg",
+    ticker: "PAXG",
+    name: "Gold (tokenized)",
+    kind: "rwa-gold",
+    chainId: 1,
+    address: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+    eligibleRegions: "NON_SANCTIONED",
+    disclosure: GOLD_DISCLOSURE,
+    issuer: "Paxos",
+    decimals: 18,
   },
 
   // ── Verified TO PIN — appended after the doc-05 procedure (verified 2026-07-12):

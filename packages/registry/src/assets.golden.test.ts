@@ -30,6 +30,25 @@ const ALL_EQUITY_MINTS: Record<string, string> = {
   ...VERIFIED_TO_PIN_MINTS,
 };
 
+// ── GOLD PINS (doc 20) ───────────────────────────────────────────────────────
+// A DELIBERATE SECOND COPY of the tokenized-gold contract address(es), hardcoded
+// here so an accidental edit to assets.ts fails this test. THERE IS NO
+// `Xs`-PREFIX TRIPWIRE FOR ERC-20s (unlike Solana xStocks mints): this pin, the
+// issuer-page verification recorded in assets.ts, and this golden copy are the
+// ENTIRE fake-contract defense (G-R2). Verified 2026-07-17 against Paxos's own
+// repo README + the issuer-verified Etherscan token page.
+const GOLD_TOKENS: Record<string, string> = {
+  paxg: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+};
+
+// XAUT (Tether Gold) is DEFERRED until a passing G-R1. When it is pinned, its
+// current address is 0x68749665FF8D2d112Fa859AA293F07A622782F38 (HANDOFF §20) —
+// but this is the DEPRECATED old contract, which carries Etherscan's "Tether
+// Gold: Old XAUt Token" tag and an on-chain migration notice. It is genuinely
+// Tether-issued yet dead — exactly the failure a prefix tripwire could not catch —
+// so it must NEVER enter the registry. This negative pin guards that forever.
+const DEPRECATED_XAUT = "0x4922a015c4407F87432B179bb209e125432E4a2A";
+
 const byId = (id: string) => REGISTRY.find((a) => a.id === id);
 
 describe("golden pins (defense against accidental assets.ts edits)", () => {
@@ -67,6 +86,22 @@ describe("golden pins (defense against accidental assets.ts edits)", () => {
     expect(byId("eth")?.address).toBe("0x0000000000000000000000000000000000000000");
     expect(byId("eth")?.chainId).toBe(1);
   });
+
+  it.each(Object.entries(GOLD_TOKENS))(
+    "gold %s contract matches byte-for-byte (the pin IS the defense — no Xs tripwire)",
+    (id, address) => {
+      expect(byId(id)?.address).toBe(address);
+    },
+  );
+
+  it("the DEPRECATED old XAUT contract is NEVER in the registry (negative pin)", () => {
+    const dead = DEPRECATED_XAUT.toLowerCase();
+    for (const a of REGISTRY) {
+      expect(a.address.toLowerCase(), `${a.id} must not be the dead XAUT`).not.toBe(
+        dead,
+      );
+    }
+  });
 });
 
 describe("registry invariants (doc 05 contract)", () => {
@@ -91,6 +126,30 @@ describe("registry invariants (doc 05 contract)", () => {
       expect(a.disclosure).toBeUndefined();
       expect(a.issuer).toBeUndefined();
     }
+  });
+
+  const golds = () => REGISTRY.filter((a) => a.kind === "rwa-gold");
+
+  it("every gold asset is NON_SANCTIONED, Ethereum (1), with issuer + disclosure + decimals", () => {
+    expect(golds().length).toBeGreaterThan(0); // PAXG present
+    for (const a of golds()) {
+      expect(a.eligibleRegions).toBe("NON_SANCTIONED");
+      expect(a.chainId).toBe(1);
+      expect(a.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      expect(a.disclosure, `${a.ticker} disclosure`).toBeTruthy();
+      expect(a.issuer).toBeTruthy();
+      expect(typeof a.decimals).toBe("number");
+    }
+  });
+
+  it("PAXG carries its verbatim gold disclosure and 18 decimals (G12: 'gold', never 'RWA')", () => {
+    const paxg = byId("paxg");
+    expect(paxg?.disclosure).toBe(
+      "PAXG tracks physical gold held by Paxos. It is a token claim, not vault access. Issuer: Paxos.",
+    );
+    expect(paxg?.disclosure).not.toMatch(/\brwa\b/i);
+    expect(paxg?.issuer).toBe("Paxos");
+    expect(paxg?.decimals).toBe(18);
   });
 
   it("SPYx discloses the S&P 500 ETF", () => {

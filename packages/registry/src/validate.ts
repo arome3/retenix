@@ -17,6 +17,24 @@ export function validateRegistry(reg: readonly RegistryAsset[]) {
         throw new Error(`${a.ticker}: xStocks are Solana SPL mints`);
       if (!a.disclosure || a.eligibleRegions !== "NON_RESTRICTED")
         throw new Error(`${a.ticker}: equity invariants`);
+    } else if (a.kind === "rwa-gold") {
+      // Tokenized gold (doc 20). No `Xs` tripwire exists for ERC-20s — the pin
+      // list IS the defense — so these load-time invariants are the fail-fast
+      // parity equities get: a bad gold row throws at import, not during a buy.
+      if (a.chainId !== 1)
+        throw new Error(`${a.ticker}: rwa-gold is an Ethereum ERC-20 (chain 1)`);
+      if (!/^0x[0-9a-fA-F]{40}$/.test(a.address))
+        throw new Error(`${a.ticker}: rwa-gold address must be a 0x ERC-20 contract`);
+      if (!a.disclosure)
+        throw new Error(`${a.ticker}: rwa-gold requires a disclosure line`);
+      if (a.eligibleRegions !== "NON_SANCTIONED")
+        throw new Error(`${a.ticker}: rwa-gold must be NON_SANCTIONED (doc 20 OQ-R2)`);
+      if (!a.issuer)
+        throw new Error(`${a.ticker}: rwa-gold requires a named issuer`);
+      // Require a positive decimals (PAXG 18, XAUT 6) — the golden test pins the
+      // exact value per token; here we only enforce that one was declared.
+      if (typeof a.decimals !== "number" || a.decimals <= 0)
+        throw new Error(`${a.ticker}: rwa-gold requires positive decimals`);
     }
   }
   const ids = new Set(reg.map((a) => a.id));

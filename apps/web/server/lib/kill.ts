@@ -122,7 +122,7 @@ export function planKillLegs(input: {
       });
       continue;
     }
-    if (asset.kind !== "equity") {
+    if (asset.kind === "crypto") {
       // SOL/ETH ledger positions: liquidated through the primary convert leg.
       // No convert leg (balance at/below floor) → the value is sub-floor;
       // list it so the completion screen stays honest.
@@ -133,6 +133,27 @@ export function planKillLegs(input: {
           reason: "below-floor",
         });
       }
+      continue;
+    }
+    // Tokenized gold (rwa-gold, doc 20) is an ERC-20, NOT a primary token — it
+    // cannot be subsumed by a convert leg, so it liquidates like an equity: a
+    // sell leg to USDC on its own chain (Ethereum). The kill-runner sell path is
+    // already chain-agnostic. sell-all uses the ledger qty (no EVM balance scan
+    // in v1 — same posture as SOL/ETH; the production upgrade is an Alchemy
+    // getTokenBalances scan on chain 1, flagged in HANDOFF, not built here).
+    // Any future non-equity/non-crypto/non-gold kind falls through to a skip.
+    if (asset.kind === "rwa-gold") {
+      const goldMark = input.marks.get(asset.id);
+      legs.push({
+        kind: "sell",
+        assetId: asset.id,
+        symbol: asset.ticker,
+        chainId: asset.chainId,
+        network: networkName(asset.chainId), // copy-canon-allow
+        token: asset.address,
+        amountHuman: position.qtyHuman ?? String(position.qty),
+        usdEst: goldMark ? round2(position.qty * goldMark.usd) : null,
+      });
       continue;
     }
     const mark = input.marks.get(asset.id);
