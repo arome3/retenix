@@ -145,7 +145,7 @@ export const estateRouter = router({
         if (t.address.toLowerCase() !== expected.toLowerCase()) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `tuple for chain ${t.chainId} does not target the recorded delegate`,
+            message: `authorization for source ${t.chainId} does not match the recorded coverage`,
           });
         }
       }
@@ -267,7 +267,7 @@ export const estateRouter = router({
         if (t.address.toLowerCase() !== expected.toLowerCase()) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `tuple for chain ${t.chainId} does not target the recorded delegate`,
+            message: `authorization for source ${t.chainId} does not match the recorded coverage`,
           });
         }
       }
@@ -466,7 +466,7 @@ export const estateRouter = router({
         started: boolean;
         done: boolean;
         receipt: string | null;
-        chains: ClaimChainProgress[];
+        sources: ClaimChainProgress[];
       }> => {
         const record = await findClaimToken(ctx.db, input.token);
         if (!record) {
@@ -504,7 +504,7 @@ export const estateRouter = router({
           started,
           done: Boolean(claimedRow),
           receipt: claimedRow ? estateClaimedReceipt(claimedPayload?.sourceCount ?? 0) : null,
-          chains: [...byChain.values()].sort((a, b) => a.chainId - b.chainId),
+          sources: [...byChain.values()].sort((a, b) => a.chainId - b.chainId),
         };
       },
     ),

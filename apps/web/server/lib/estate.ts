@@ -125,7 +125,7 @@ export function claimDelegateFor(chainId: number): string {
     case 196:
       return env.CLAIM_DELEGATE_ADDRESS_XLAYER;
     default:
-      throw new Error(`[estate] no claim delegate for chain ${chainId}`);
+      throw new Error(`[estate] no claim target recorded for ${chainId}`);
   }
 }
 
@@ -142,7 +142,7 @@ function rpcUrlFor(chainId: number): string {
     case 196:
       return env.RPC_URL_XLAYER;
     default:
-      throw new Error(`[estate] no RPC endpoint for chain ${chainId}`);
+      throw new Error(`[estate] no RPC endpoint recorded for ${chainId}`);
   }
 }
 
@@ -163,11 +163,11 @@ async function jsonRpcNonce(chainId: number, owner: string): Promise<number> {
     }),
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) throw new Error(`[estate] nonce read failed on chain ${chainId}: ${res.status}`);
+  if (!res.ok) throw new Error(`[estate] nonce read failed on ${chainId}: ${res.status}`);
   const body = (await res.json()) as { result?: string; error?: { message?: string } };
   if (typeof body.result !== "string") {
     throw new Error(
-      `[estate] nonce read failed on chain ${chainId}: ${body.error?.message ?? "no result"}`,
+      `[estate] nonce read failed on ${chainId}: ${body.error?.message ?? "no result"}`,
     );
   }
   return Number(BigInt(body.result));

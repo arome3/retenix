@@ -4,6 +4,7 @@
 // (Broker · Guardian · Continuity), each listing that agent's C3 cards or an
 // empty-state prompt; C5 IntentBar fixed at the bottom. Card lifecycle actions
 // (Pause / Resume / Revoke) are signed mutations; Edit re-opens the numbers.
+import Link from "next/link";
 import { useState } from "react";
 import type {
   BrokerSection,
@@ -158,9 +159,19 @@ export function AgentsScreen({
               <h2 className="text-h2 font-display">{title}</h2>
             </div>
             {stack.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-small text-muted-foreground">
-                {empty}
-              </p>
+              kind === "legacy" ? (
+                // doc 14: the S5 link on the legacy card (module 10 deviation 9)
+                <Link
+                  href="/legacy"
+                  className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-small text-muted-foreground transition-micro hover:border-agent hover:text-foreground"
+                >
+                  {empty} <span className="text-agent">Set one up →</span>
+                </Link>
+              ) : (
+                <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-small text-muted-foreground">
+                  {empty}
+                </p>
+              )
             ) : (
               stack.map((card) => (
                 <RosterCard
@@ -178,6 +189,11 @@ export function AgentsScreen({
                 />
               ))
             )}
+            {kind === "legacy" && stack.length > 0 ? (
+              <Link href="/legacy" className="text-small text-agent">
+                Set up or review your inheritance plan →
+              </Link>
+            ) : null}
           </section>
         );
       })}

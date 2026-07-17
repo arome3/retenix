@@ -345,7 +345,7 @@ describe("estate.enroll", () => {
   it("rejects tuples that do not target the recorded delegate — nothing written", async () => {
     await expect(
       enroll({ tuples: tuplesFor({ 42161: `0x${"99".repeat(20)}` }) }),
-    ).rejects.toThrow(/does not target the recorded delegate/);
+    ).rejects.toThrow(/does not match the recorded coverage/);
     const rows = await db.select().from(estates).where(eq(estates.userId, userId));
     expect(rows).toHaveLength(0);
     expect(currentRelay().calls.enroll).toHaveLength(0);
@@ -540,7 +540,7 @@ describe("heir claim gate", () => {
     let status = await anonCaller().estate.claimStatus({ token });
     expect(status.started).toBe(true);
     expect(status.done).toBe(false);
-    expect(status.chains).toEqual([
+    expect(status.sources).toEqual([
       { chainId: 8453, network: "Base", state: "claimed" },
       { chainId: 42161, network: "Arbitrum", state: "stale-tuple" },
     ]);

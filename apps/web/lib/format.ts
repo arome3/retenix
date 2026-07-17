@@ -84,3 +84,19 @@ export function splitUsd(v: number): { main: string; cents: string | null } {
   const dot = s.lastIndexOf(".");
   return { main: s.slice(0, dot), cents: s.slice(dot + 1) };
 }
+
+/** C8 countdown remaining time — "4d 12h" / "2h 05m" / "1m 30s" / "42s".
+ *  Digits change every second at demo scale, so the caller renders it through
+ *  <Num> (.tnum — G13). Clamped at zero (an elapsed countdown never renders
+ *  negative time). */
+export function formatCountdown(msRemaining: number): string {
+  const s = Math.max(0, Math.floor(msRemaining / 1000));
+  const d = Math.floor(s / 86_400);
+  const h = Math.floor((s % 86_400) / 3_600);
+  const m = Math.floor((s % 3_600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m ${String(sec).padStart(2, "0")}s`;
+  return `${sec}s`;
+}
