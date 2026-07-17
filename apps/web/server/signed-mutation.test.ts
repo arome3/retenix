@@ -17,12 +17,12 @@ import { appRouter } from "./routers";
  * stands in for Magic, because the server only ever recovers a signer from a
  * message — it cannot tell, and must not care, which key custodian produced it.
  *
- * send.execute is a bare signedProcedure whose body throws NOT_IMPLEMENTED
- * (module 15 owns it) and whose input is withSig(z.unknown()) — the perfect
- * probe: NOT_IMPLEMENTED means the signature middleware *passed*, and any
- * UNAUTHORIZED means it rejected. (This test moved off plans.activate when
- * module 10 gave it a real, typed payload — send.execute keeps the mechanism
- * test payload-agnostic.)
+ * send.execute (real since module 15, gatedSigned) stays the probe: a
+ * report-phase payload with an unknown executionId reaches the body with NO
+ * network I/O and deterministically answers BAD_REQUEST "unknown or
+ * unauthorized execution" — reaching the body proves the signature middleware
+ * *passed*; any UNAUTHORIZED means it rejected. (This test moved off
+ * plans.activate when module 10 gave it a real payload.)
  */
 const ROUTE = "send.execute";
 const EMAIL = "signer@example.com";
@@ -58,6 +58,16 @@ async function sign(
 
 const inFiveMinutes = () => Math.floor(Date.now() / 1000) + 240;
 
+/** Schema-valid report payload whose executionId can never exist — the body
+ *  answers BAD_REQUEST without touching any network edge. `tag` must be hex
+ *  (it lands inside the uuid). */
+const probePayload = (tag: string) => ({
+  phase: "report" as const,
+  // uuid v4 shape, deterministic per tag
+  executionId: `00000000-0000-4000-8000-${tag.padEnd(12, "0").slice(0, 12)}`,
+  clientOutcome: "failed" as const,
+});
+
 async function cleanup() {
   const rows = await db
     .select({ id: users.id })
@@ -87,23 +97,26 @@ afterAll(cleanup);
 
 describe("signedProcedure round trip", () => {
   it("recovers the session EOA from a fresh personal_sign", async () => {
-    const payload = { planId: "abc", amountUsd: 25 };
+    const payload = probePayload("abc");
     const sig = await sign(payload, { nonce: Date.now(), expiry: inFiveMinutes() });
 
     // Reaching the body proves the signature verified against session.eoaAddr.
     await expect(
       appRouter.createCaller(ctx()).send.execute({ payload, sig }),
-    ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: /unknown or unauthorized execution/,
+    });
   });
 
   it("rejects a replayed nonce", async () => {
-    const payload = { planId: "replay" };
+    const payload = probePayload("ae91a1");
     const nonce = Date.now() + 1_000;
     const sig = await sign(payload, { nonce, expiry: inFiveMinutes() });
 
     await expect(
       appRouter.createCaller(ctx()).send.execute({ payload, sig }),
-    ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     // Byte-identical envelope, second time.
     await expect(
@@ -113,7 +126,7 @@ describe("signedProcedure round trip", () => {
 
   it("rejects a signature from a key that is not the session EOA", async () => {
     const impostor = Wallet.createRandom();
-    const payload = { planId: "impostor" };
+    const payload = probePayload("1b9057");
     const nonce = Date.now() + 2_000;
     const expiry = inFiveMinutes();
     const message = buildSignedMessage({
@@ -138,17 +151,17 @@ describe("signedProcedure round trip", () => {
 
   it("rejects a signature over a different payload", async () => {
     const nonce = Date.now() + 3_000;
-    const sig = await sign({ planId: "signed-this" }, { nonce, expiry: inFiveMinutes() });
+    const sig = await sign(probePayload("516ed0"), { nonce, expiry: inFiveMinutes() });
 
     await expect(
       appRouter
         .createCaller(ctx())
-        .send.execute({ payload: { planId: "sent-that" }, sig }),
+        .send.execute({ payload: probePayload("5e47a7"), sig }),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("rejects an expired signature", async () => {
-    const payload = { planId: "stale" };
+    const payload = probePayload("57a1e0");
     const nonce = Date.now() + 4_000;
     const sig = await sign(payload, {
       nonce,
@@ -161,7 +174,7 @@ describe("signedProcedure round trip", () => {
   });
 
   it("rejects an expiry beyond the five-minute replay window", async () => {
-    const payload = { planId: "too-far" };
+    const payload = probePayload("70fa20");
     const nonce = Date.now() + 5_000;
     const sig = await sign(payload, {
       nonce,
@@ -174,7 +187,7 @@ describe("signedProcedure round trip", () => {
   });
 
   it("is UNAUTHORIZED without a session, before any signature is examined", async () => {
-    const payload = { planId: "no-session" };
+    const payload = probePayload("905e55");
     const sig = await sign(payload, { nonce: Date.now() + 6_000, expiry: inFiveMinutes() });
     const anonymous: Context = { ...ctx(), session: null };
 

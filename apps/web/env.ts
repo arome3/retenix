@@ -55,6 +55,11 @@ const serverSchema = z.object({
   // Doc 00 lists this worker-side; enrollment (web) substitutes it into
   // inactivitySecs when DEMO_MODE=1 (TS-9.5 — at enrollment time only).
   DEMO_INACTIVITY_SECS: z.coerce.number().int().positive().default(120),
+  // Module 15 invite emails (doc 15 unregistered-email path) — the module-14
+  // Resend posture verbatim: both OPTIONAL, absent → the invite is logged
+  // loudly and the flow proceeds (the demo never depends on a provider).
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(1).optional(),
 });
 
 const clientSchema = z.object({

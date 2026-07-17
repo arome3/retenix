@@ -7,7 +7,7 @@
 // Deps-injected (the dust.ts pattern) so unit tests cover hit/miss/timeout
 // without a network.
 import { createPublicClient, http, type PublicClient } from "viem";
-import { mainnet } from "viem/chains";
+import { mainnet } from "viem/chains"; // copy-canon-allow (viem's subpath, not user copy)
 import { normalize } from "viem/ens";
 
 import { env } from "@/env";
