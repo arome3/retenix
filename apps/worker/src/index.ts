@@ -10,10 +10,24 @@ import { PgBoss } from "pg-boss";
 import { getDb, getPool } from "@retenix/db";
 import { warmRegistry } from "@retenix/registry";
 
+import { createUa, getTransactions } from "@retenix/ua";
+
 import { env } from "../env";
 import { EXECUTE_QUEUE } from "./ctx";
 import { executeJob, type ExecutorDeps } from "./executor";
+import {
+  getWorkerEscrowProvider,
+  PolicyEstateClient,
+} from "./estate-support";
+import {
+  HEARTBEAT_CRON_DEMO,
+  HEARTBEAT_CRON_PROD,
+  heartbeatTick,
+  observeOwner,
+  type HeartbeatDeps,
+} from "./heartbeat";
 import { startHttp } from "./http";
+import { defaultKeeperDeps, KEEPER_CRON_DEMO, KEEPER_CRON_PROD, keeperTick, type KeeperDeps } from "./keeper";
 import { getAgentSigner, type AgentSigner } from "./kms";
 import { captureError, initSentry } from "./notify";
 import { PolicyClient } from "./policy";
@@ -171,7 +185,69 @@ async function main(): Promise<void> {
   // the top of the hour (readiness must not wait on it — fire and forget).
   void snapTick();
 
-  const server = startHttp({ db, boss, demoMode });
+  // --- estate crons (doc 14) — heartbeat observation + keeper. Both need a
+  // signer (relayer/keeper identity = the agent signer on the current role
+  // wiring); a degraded boot skips them with the same warning posture.
+  let heartbeatDeps: HeartbeatDeps | null = null;
+  let keeperDeps: KeeperDeps | null = null;
+  let heartbeatCron: ReturnType<typeof cron.schedule> | null = null;
+  let keeperCron: ReturnType<typeof cron.schedule> | null = null;
+  if (agent) {
+    const estateOnchain = new PolicyEstateClient(agent.ethSigner);
+    heartbeatDeps = {
+      db,
+      onchain: estateOnchain,
+      observer: {
+        // per-owner UA (read-only — no signer): the cross-network activity feed
+        recentActivity: (owner) =>
+          getTransactions(
+            createUa({
+              ownerAddress: owner,
+              credentials: {
+                projectId: env.PARTICLE_PROJECT_ID,
+                projectClientKey: env.PARTICLE_CLIENT_KEY,
+                projectAppUuid: env.PARTICLE_APP_UUID,
+              },
+            }),
+          ),
+      },
+    };
+    try {
+      keeperDeps = defaultKeeperDeps(db, estateOnchain, getWorkerEscrowProvider(), agent.ethSigner);
+    } catch (err) {
+      captureError(err, { source: "escrow-provider-boot" });
+      console.warn(
+        "[worker] estate keeper disabled — no escrow provider (set ESCROW_DEV_SECRET for dev, or AWS KMS credentials)",
+      );
+    }
+    const hb = heartbeatDeps;
+    heartbeatCron = cron.schedule(
+      demoMode ? HEARTBEAT_CRON_DEMO : HEARTBEAT_CRON_PROD,
+      () => void heartbeatTick(hb).catch((err) => captureError(err, { source: "heartbeat-cron" })),
+      { noOverlap: true },
+    );
+    if (keeperDeps) {
+      const kd = keeperDeps;
+      keeperCron = cron.schedule(
+        demoMode ? KEEPER_CRON_DEMO : KEEPER_CRON_PROD,
+        () => void keeperTick(kd).catch((err) => captureError(err, { source: "keeper-cron" })),
+        { noOverlap: true },
+      );
+    }
+  } else {
+    console.warn("[worker] estate heartbeat/keeper disabled (degraded boot — no signer)");
+  }
+
+  const server = startHttp({
+    db,
+    boss,
+    demoMode,
+    estateWebhook: {
+      db,
+      // immediate observation on webhook match — UX freshness only
+      observe: heartbeatDeps ? (estate) => observeOwner(heartbeatDeps, estate) : undefined,
+    },
+  });
 
   // Fire-and-forget; boot readiness must not wait on quote warming.
   if (agent) void warmRegistryAtBoot(agent);
@@ -189,6 +265,8 @@ async function main(): Promise<void> {
     );
     scan.stop();
     snapshots.stop();
+    heartbeatCron?.stop();
+    keeperCron?.stop();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     try {
       // Waits for the in-flight handler; a >60s poll is failed into pg-boss
