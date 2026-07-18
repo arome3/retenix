@@ -2,12 +2,13 @@ import { events, users, type Db } from "@retenix/db";
 import {
   COMPLIANCE_EVENTS,
   isEquityEligible,
+  isLeverageUnlocked,
   isQuizAllCorrect,
   quizAnswersSchema,
   regionSchema,
 } from "@retenix/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { setSessionCookie } from "../session";
 import { protectedProcedure, router } from "../trpc";
@@ -49,6 +50,28 @@ async function hasEvent(
     .where(and(eq(events.userId, userId), eq(events.type, type)))
     .limit(1);
   return Boolean(row);
+}
+
+/**
+ * The answers on the NEWEST quiz_passed event, or null if none.
+ *
+ * Newest, not earliest (unlike readRegionSet): the quiz gained a question in
+ * doc 18 F11, so a user may hold a stale 3-answer row plus a fresh 4-answer
+ * one. Region is set-once and immutable; quiz answers are upgradeable.
+ */
+async function readQuizAnswers(tx: Tx, userId: string): Promise<unknown> {
+  const [row] = await tx
+    .select({ payloadJson: events.payloadJson })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.type, COMPLIANCE_EVENTS.quizPassed),
+      ),
+    )
+    .orderBy(desc(events.createdAt))
+    .limit(1);
+  return (row?.payloadJson as { answers?: unknown } | undefined)?.answers ?? null;
 }
 
 /** The region recorded by the earliest region_set event, or null if none. */
@@ -145,7 +168,13 @@ export const complianceRouter = router({
             message: "choose a region first",
           });
         }
-        if (await hasEvent(tx, userId, COMPLIANCE_EVENTS.quizPassed)) return;
+        // Idempotent for a user whose stored answers already cover the CURRENT
+        // quiz. Deliberately NOT `hasEvent(quizPassed)`: doc 18 F11 added a
+        // fourth question, and a bare existence check would permanently strand
+        // every pre-F11 user on 3 stale answers with no way to re-answer and
+        // unlock leveraged assets. Re-submitting appends a newer row;
+        // readQuizAnswers reads the newest.
+        if (isLeverageUnlocked(await readQuizAnswers(tx, userId))) return;
         await tx.insert(events).values({
           userId,
           type: COMPLIANCE_EVENTS.quizPassed,

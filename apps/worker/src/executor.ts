@@ -26,18 +26,20 @@
 // skip-and-notify; nothing silent). Throwing is reserved for infra faults,
 // which pg-boss retries as crash recovery.
 
-import { desc, eq } from "drizzle-orm";
-import { executions, jobs, plans, users, type Db } from "@retenix/db";
+import { and, desc, eq } from "drizzle-orm";
+import { events, executions, jobs, plans, users, type Db } from "@retenix/db";
 import { REGISTRY, assetIdHash, eligibleAssets } from "@retenix/registry";
 import {
   acceptableAddresses,
   blockedReceipt,
   brokerParamsSchema,
   capText,
+  COMPLIANCE_EVENTS,
   effectiveSpent,
   executedReceipt,
   extractFillQty,
   extractFundingSources,
+  isLeverageUnlocked,
   quoteFeeFloorUsd,
   refundedReceipt,
   revokedReceipt,
@@ -202,6 +204,10 @@ interface LegCtx {
   contractPlanId: number | null;
   userId: string;
   region: string;
+  /** doc 18 F11 — re-read at EXECUTION time, never trusted from the plan row.
+   *  A plan activated while unlocked must still be blocked if the answer that
+   *  unlocked it is no longer on record. */
+  leveragedUnlocked: boolean;
 }
 
 async function loadCtx(db: Db, jobId: string): Promise<LegCtx | null> {
@@ -223,7 +229,27 @@ async function loadCtx(db: Db, jobId: string): Promise<LegCtx | null> {
     .innerJoin(users, eq(plans.userId, users.id))
     .where(eq(jobs.id, jobId))
     .limit(1);
-  return (row as LegCtx | undefined) ?? null;
+  if (!row) return null;
+  // Second lookup rather than a join: `events` holds many rows per user, so a
+  // join would fan out the leg row. One indexed read per execution is cheap
+  // beside the UA round-trips this job is about to make.
+  const [quiz] = await db
+    .select({ payloadJson: events.payloadJson })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, row.userId),
+        eq(events.type, COMPLIANCE_EVENTS.quizPassed),
+      ),
+    )
+    .orderBy(desc(events.createdAt))
+    .limit(1);
+  const answers = (quiz?.payloadJson as { answers?: unknown } | undefined)
+    ?.answers;
+  return {
+    ...(row as Omit<LegCtx, "leveragedUnlocked">),
+    leveragedUnlocked: isLeverageUnlocked(answers),
+  };
 }
 
 interface ExecRow {
@@ -410,7 +436,9 @@ class LegRun {
     // Step 3a — pinned registry + region re-check (G11; doc 04 semantics).
     if (
       !asset ||
-      !eligibleAssets(this.ctx.region).some((a) => a.id === this.leg.assetId)
+      !eligibleAssets(this.ctx.region, {
+        leveragedUnlocked: this.ctx.leveragedUnlocked,
+      }).some((a) => a.id === this.leg.assetId)
     ) {
       return this.terminalBlocked("AssetNotAllowed", onchain, "skipped");
     }

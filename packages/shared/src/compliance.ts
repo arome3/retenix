@@ -178,12 +178,53 @@ export const COMPLIANCE_QUIZ: readonly QuizQuestion[] = [
     explanation:
       "Prices can move around the clock — including when the stock market is closed, when moves can be sharper.",
   },
+  {
+    // doc 18 F11: the appropriateness quiz gains a leverage question before any
+    // leveraged token is buyable. Deliberately says "2× token", never the word
+    // "leverage" — that word is reserved for the F12 compliance surface (G12),
+    // and a concrete example teaches better than the jargon anyway.
+    id: 4,
+    prompt:
+      "A 2× token doubles the daily move. Hold it for a month — do you get double the month's move?",
+    options: [
+      {
+        text: "No — it resets daily, so over time the result drifts from double, and choppy markets erode it.",
+        correct: true,
+      },
+      {
+        text: "Yes — double the daily move means double the move over any period.",
+        correct: false,
+      },
+    ],
+    explanation:
+      "It resets every day. Over more than a day the result drifts from double — and in a choppy market it can lose value even when the stock ends where it started.",
+  },
 ] as const;
+
+/** The quiz question that unlocks leveraged assets (doc 18 F11). */
+export const LEVERAGE_QUIZ_ID = 4;
 
 /** True iff every question's selected option index is the correct one. */
 export function isQuizAllCorrect(answers: number[]): boolean {
   if (answers.length !== COMPLIANCE_QUIZ.length) return false;
   return COMPLIANCE_QUIZ.every((q, i) => q.options[answers[i]]?.correct === true);
+}
+
+/**
+ * True iff a stored `compliance.quiz_passed` payload covers the CURRENT quiz —
+ * i.e. the user has answered the leverage question (doc 18 F11).
+ *
+ * GRANDFATHERING IS DELIBERATE, NOT INCIDENTAL. A pre-F11 row holds 3 answers,
+ * so isQuizAllCorrect's length check fails and this returns false: that user
+ * keeps full NON-leveraged access (the gate is `users.region`, untouched here)
+ * and simply cannot see leveraged rows until they answer the new question.
+ * Nobody is locked out of what they already had, and nobody reaches a 3× token
+ * without having been asked about decay.
+ */
+export function isLeverageUnlocked(answers: unknown): boolean {
+  if (!Array.isArray(answers)) return false;
+  if (!answers.every((a): a is number => typeof a === "number")) return false;
+  return isQuizAllCorrect(answers);
 }
 
 /** Input schema for `compliance.submitQuiz` — one option index per question. */

@@ -2,10 +2,12 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { events, users, type Db } from "@retenix/db";
 import {
   buildSignedMessage,
+  COMPLIANCE_EVENTS,
   computeInputHash,
+  isLeverageUnlocked,
   sigEnvelopeSchema,
 } from "@retenix/shared";
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { verifyMessage } from "ethers";
 import { z } from "zod";
 import type { Context } from "./context";
@@ -45,7 +47,10 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 // protectedProcedure. account.bootstrap is the deliberate exception: it runs
 // pre-gate (lib/post-login.ts), so it stays protectedProcedure.
 // ---------------------------------------------------------------------------
-async function assertGatePassed(db: Db, userId: string): Promise<string> {
+async function assertGatePassed(
+  db: Db,
+  userId: string,
+): Promise<{ region: string; leveragedUnlocked: boolean }> {
   const [row] = await db
     .select({ region: users.region })
     .from(users)
@@ -57,13 +62,38 @@ async function assertGatePassed(db: Db, userId: string): Promise<string> {
       message: "eligibility gate not completed",
     });
   }
-  return row.region;
+  // doc 18 F11's second, orthogonal dimension: region says WHERE an asset may
+  // be sold, this says TO WHOM. Read here because the gate already costs one
+  // per-request round trip and every asset route composes off it — so no
+  // caller can forget it, and `eligibleAssets` stays fail-closed if one does.
+  // Newest row wins: the quiz gained a question, so a user may hold a stale
+  // 3-answer row alongside a fresh 4-answer one.
+  const [quiz] = await db
+    .select({ payloadJson: events.payloadJson })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.type, COMPLIANCE_EVENTS.quizPassed),
+      ),
+    )
+    .orderBy(desc(events.createdAt))
+    .limit(1);
+  const answers = (quiz?.payloadJson as { answers?: unknown } | undefined)
+    ?.answers;
+  return {
+    region: row.region,
+    leveragedUnlocked: isLeverageUnlocked(answers),
+  };
 }
 
 export const gatedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const region = await assertGatePassed(ctx.db, ctx.session.userId);
+  const { region, leveragedUnlocked } = await assertGatePassed(
+    ctx.db,
+    ctx.session.userId,
+  );
   return next({
-    ctx: { ...ctx, session: { ...ctx.session, region } },
+    ctx: { ...ctx, session: { ...ctx.session, region, leveragedUnlocked } },
   });
 });
 
@@ -144,9 +174,12 @@ export const signedProcedure = protectedProcedure.use(
 // ---------------------------------------------------------------------------
 export const gatedSignedProcedure = protectedProcedure
   .use(async ({ ctx, next }) => {
-    const region = await assertGatePassed(ctx.db, ctx.session.userId);
+    const { region, leveragedUnlocked } = await assertGatePassed(
+      ctx.db,
+      ctx.session.userId,
+    );
     return next({
-      ctx: { ...ctx, session: { ...ctx.session, region } },
+      ctx: { ...ctx, session: { ...ctx.session, region, leveragedUnlocked } },
     });
   })
   .use(async ({ ctx, path, getRawInput, next }) => {

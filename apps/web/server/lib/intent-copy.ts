@@ -1,7 +1,7 @@
 // Intent-parse response copy (doc 09) — a DECISION surface, so the banned
 // vocabulary (G12) applies fully. Every user-visible string this route can
 // emit lives in this one file for copy review.
-import { eligibleAssets } from "@retenix/registry";
+import { eligibleAssets, type AssetAccess } from "@retenix/registry";
 
 /** The fixed confidence line — never a fabricated numeric confidence score. */
 export const CONFIDENCE_NOTE = "Here's what I understood — check the numbers";
@@ -16,8 +16,11 @@ export interface IntentDecline {
  * copy). Tickers come from the region's own registry slice so a blocked-region
  * user is never nudged toward an asset the gate hides from them.
  */
-export function intentSuggestions(region: string): string[] {
-  const assets = eligibleAssets(region);
+export function intentSuggestions(
+  region: string,
+  access: AssetAccess = {},
+): string[] {
+  const assets = eligibleAssets(region, access);
   const ticker = (id: string) => assets.find((a) => a.id === id)?.ticker;
   const sol = ticker("sol") ?? "SOL";
   const eth = ticker("eth") ?? "ETH";

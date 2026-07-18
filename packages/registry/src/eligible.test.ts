@@ -34,24 +34,59 @@ describe("eligibleAssets (the one sanctioned regional filter, doc 04/20)", () =>
     }
   });
 
-  it("a non-restricted region (DE, NG) sees the full registry", () => {
+  it("a non-restricted region (DE, NG) sees the full registry once leverage is unlocked", () => {
     for (const region of ["DE", "NG"]) {
-      expect(eligibleAssets(region)).toEqual(REGISTRY);
+      expect(eligibleAssets(region, { leveragedUnlocked: true })).toEqual(REGISTRY);
     }
   });
 
-  it("matches the verbatim doc-04/20 filter expression exactly (three tiers)", () => {
+  it("leveraged assets are FAIL-CLOSED: an eligible region without the unlock sees none", () => {
+    // doc 18 F11 — the appropriateness gate. Region alone is never enough.
+    for (const region of ["DE", "NG", "JP"]) {
+      const locked = eligibleAssets(region);
+      expect(locked.some((a) => a.kind === "leveraged")).toBe(false);
+      // ...and everything else is untouched by the new dimension.
+      expect(locked.map((a) => a.id)).toEqual(
+        REGISTRY.filter((a) => a.kind !== "leveraged").map((a) => a.id),
+      );
+    }
+  });
+
+  it("the unlock never overrides region: a restricted region sees no leveraged asset even unlocked", () => {
+    // The two dimensions are AND-ed, not OR-ed. Shift's own terms exclude
+    // US/UK, and NON_RESTRICTED (US/CA/GB/AU) is stricter still.
+    for (const region of ["US", "CA", "GB", "AU"]) {
+      const unlocked = eligibleAssets(region, { leveragedUnlocked: true });
+      expect(unlocked.some((a) => a.kind === "leveraged")).toBe(false);
+      expect(unlocked.map((a) => a.id).sort()).toEqual(["eth", "paxg", "sol"]);
+    }
+  });
+
+  it("matches the verbatim doc-04/18/20 filter expression exactly (three tiers × the leverage gate)", () => {
     const RESTRICTED = ["US", "CA", "GB", "AU"];
     const SANCTIONED = ["CU", "IR", "KP", "SY"];
-    const verbatim = (region: string) =>
+    const verbatim = (region: string, leveragedUnlocked: boolean) =>
       REGISTRY.filter((a) => {
-        if (a.eligibleRegions === "ALL") return true;
-        if (a.eligibleRegions === "NON_SANCTIONED")
-          return !SANCTIONED.includes(region);
-        return !RESTRICTED.includes(region); // NON_RESTRICTED
+        const regionOk =
+          a.eligibleRegions === "ALL"
+            ? true
+            : a.eligibleRegions === "NON_SANCTIONED"
+              ? !SANCTIONED.includes(region)
+              : !RESTRICTED.includes(region); // NON_RESTRICTED
+        if (!regionOk) return false;
+        if (a.kind === "leveraged") return leveragedUnlocked; // doc 18 F11
+        return true;
       });
     for (const region of ["US", "CA", "GB", "AU", "DE", "NG", "JP", "IR", "KP", ""]) {
-      expect(eligibleAssets(region)).toEqual(verbatim(region));
+      for (const unlocked of [false, true]) {
+        expect(
+          eligibleAssets(region, { leveragedUnlocked: unlocked }),
+          `${region} unlocked=${unlocked}`,
+        ).toEqual(verbatim(region, unlocked));
+      }
+      // The default argument must be the fail-closed branch, not merely
+      // equivalent to it by accident.
+      expect(eligibleAssets(region)).toEqual(verbatim(region, false));
     }
   });
 });

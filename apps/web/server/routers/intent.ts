@@ -50,7 +50,11 @@ export const intentRouter = router({
       // blocked-region user's parser literally cannot name SPYx. SOL/ETH are
       // eligible everywhere, so the tuple is never empty.
       const region = ctx.session.region;
-      const ids = eligibleAssets(region).map((a) => a.id) as [
+      // doc 18 F11: a user who has not answered the decay question cannot even
+      // NAME a leveraged token — the enum omits it, so it is unrepresentable
+      // rather than rejected later (the same posture as region narrowing).
+      const leveragedUnlocked = ctx.session.leveragedUnlocked;
+      const ids = eligibleAssets(region, { leveragedUnlocked }).map((a) => a.id) as [
         string,
         ...string[],
       ];
@@ -66,6 +70,7 @@ export const intentRouter = router({
       const resolved = resolveParse(outcome, {
         region,
         utterance: input.text,
+        leveragedUnlocked,
       });
 
       // Provenance (guardrails 6/7): a parse VERDICT — a draft, or the model's

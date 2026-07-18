@@ -13,6 +13,7 @@
 import {
   PolicyDraft as policyDraftFull,
   eligibleAssets,
+  type AssetAccess,
 } from "@retenix/registry";
 import { policyDraftFor, type PolicyDraft } from "@retenix/shared";
 import {
@@ -46,13 +47,19 @@ export type ResolvedParse =
  * The region-filtered asset-id tuple (docs 04/05) — SOL/ETH are eligible
  * everywhere, so this is never empty and the tuple cast is safe.
  */
-export function regionAssetIds(region: string): [string, ...string[]] {
-  return eligibleAssets(region).map((a) => a.id) as [string, ...string[]];
+export function regionAssetIds(
+  region: string,
+  access: AssetAccess = {},
+): [string, ...string[]] {
+  return eligibleAssets(region, access).map((a) => a.id) as [
+    string,
+    ...string[],
+  ];
 }
 
 /** The region-narrowed PolicyDraft schema the parser runs behind. */
-export function regionDraftSchema(region: string) {
-  return policyDraftFor(regionAssetIds(region));
+export function regionDraftSchema(region: string, access: AssetAccess = {}) {
+  return policyDraftFor(regionAssetIds(region, access));
 }
 
 /**
@@ -144,9 +151,13 @@ interface PostProcessed {
  */
 export function postProcessDraft(
   raw: PolicyDraft,
-  opts: { region: string; utterance: string },
+  opts: { region: string; utterance: string; leveragedUnlocked?: boolean },
 ): PostProcessed | null {
-  const eligibleIds = new Set(eligibleAssets(opts.region).map((a) => a.id));
+  const eligibleIds = new Set(
+    eligibleAssets(opts.region, {
+      leveragedUnlocked: opts.leveragedUnlocked,
+    }).map((a) => a.id),
+  );
   const droppedAssetIds: string[] = [];
   const draft: PolicyDraft = {};
 
@@ -196,7 +207,13 @@ export function postProcessDraft(
   if (!clamped.broker && !clamped.guardian && !clamped.legacy) return null;
 
   // Final wall: the response draft must satisfy the REGION-narrowed schema.
-  const checked = regionDraftSchema(opts.region).safeParse(clamped);
+  // The access object MUST be threaded here too — omitting it would apply the
+  // fail-closed default and silently reject a leveraged leg that eligibleIds
+  // (above) just admitted, turning every unlocked leveraged draft into a
+  // graceful decline. Safe direction to fail, but still wrong.
+  const checked = regionDraftSchema(opts.region, {
+    leveragedUnlocked: opts.leveragedUnlocked,
+  }).safeParse(clamped);
   if (!checked.success) return null;
 
   // PS-10.7: the footer flag rides along whenever the basket's numbers are the
@@ -218,7 +235,7 @@ export function postProcessDraft(
  */
 export function resolveParse(
   outcome: ParseOutcome,
-  opts: { region: string; utterance: string },
+  opts: { region: string; utterance: string; leveragedUnlocked?: boolean },
 ): ResolvedParse {
   if (outcome.kind === "no-object") {
     return {
