@@ -15,7 +15,7 @@
 //     list is the real defense.
 import { validateRegistry } from "./validate";
 
-export type AssetKind = "equity" | "crypto" | "rwa-gold";
+export type AssetKind = "equity" | "crypto" | "rwa-gold" | "leveraged";
 export interface RegistryAsset {
   id: string; // REGISTRY_IDS member; lowercase ticker
   ticker: string; // display: "SPYx"
@@ -24,8 +24,8 @@ export interface RegistryAsset {
   chainId: number; // CHAIN_ID values (doc 03); equities are all 101
   address: string; // SPL mint / native sentinel / ERC-20 contract
   eligibleRegions: "ALL" | "NON_RESTRICTED" | "NON_SANCTIONED"; // doc 04/20 semantics
-  disclosure?: string; // equity + rwa-gold — the "token ≠ the underlying" line
-  issuer?: "Backed" | "Paxos" | "Tether"; // equity (Backed) + rwa-gold (Paxos/Tether)
+  disclosure?: string; // equity + rwa-gold + leveraged — "token ≠ the underlying"
+  issuer?: "Backed" | "Paxos" | "Tether" | "Shift"; // equity (Backed) · rwa-gold (Paxos/Tether) · leveraged (Shift)
   // Informational only in v1: buys pass {chainId,address} to UA (which resolves
   // real decimals via IToken.decimals — HANDOFF §15), and sell-all uses qtyHuman.
   // Pinned for gold so the golden test can assert it (PAXG 18).
@@ -47,6 +47,22 @@ const etfDisclosure = (ticker: string, index: string) =>
 // VERBATIM (G12): "gold" is the sanctioned word; the string never says "RWA".
 const GOLD_DISCLOSURE =
   "PAXG tracks physical gold held by Paxos. It is a token claim, not vault access. Issuer: Paxos.";
+// Leveraged Series Tokens (doc 18 F11) — the mandatory daily-reset decay line.
+// validate.ts asserts the word "decay" is PRESENT, not merely that some
+// disclosure exists, because doc 18 §Gotchas makes this copy mandatory.
+//
+// Deliberately NOT a liquidation warning: Shift markets these as "zero
+// liquidation risk / no liquidation engine, no forced close", so a liquidation
+// line would be factually false. The real hazard is the daily reset — decay
+// over longer holds and in choppy markets — which is what this line states.
+const SHIFT_FIXED_CLAUSES =
+  "It is not a share — no voting rights or dividend claims. Issuer: Shift.";
+const leveragedDisclosure = (
+  ticker: string,
+  factor: string,
+  underlying: string,
+) =>
+  `${ticker} targets ${factor} the daily move of ${underlying}. The target resets every day, so its value decays over longer holds and in choppy markets — it is built for short holds, not for holding through a drawdown. ${SHIFT_FIXED_CLAUSES}`;
 
 export const REGISTRY: readonly RegistryAsset[] = [
   // ── Tokenized equities — xStocks SPL mints, Solana (101), issuer Backed ──
@@ -162,6 +178,115 @@ export const REGISTRY: readonly RegistryAsset[] = [
     decimals: 18,
   },
 
+  // ── Leveraged Series Tokens — Shift RWA, Solana (101), issuer Shift (doc 18 F11) ──
+  //
+  // Solana SPL mints reached by the UNCHANGED createBuyTransaction pipeline.
+  // Verified on-chain 2026-07-18: same Token-2022 program and the SAME extension
+  // profile as the xStocks above (permanentDelegate · pausableConfig ·
+  // transferHook · defaultAccountState · scaledUiAmountConfig · freezeAuthority
+  // set), so these introduce NO new class of issuer control — doc 18's "reuses
+  // the exact xStocks pipeline" claim checks out. See HANDOFF for the
+  // kill-switch consequence that applies to BOTH families.
+  //
+  // ⚠️  The `SHFT` suffix is a WEAKER tripwire than `Xs` (validate.ts): every
+  //     mint below ends in it, but module 20 proved a vanity affix cannot catch
+  //     a genuine-but-DEAD issuer address. This pinned list + the golden test
+  //     are the real defense. A PR changing any address MUST re-run the
+  //     verify-then-pin procedure + an F11 buy on the changed mint.
+  //
+  // VERIFIED 2026-07-18 against 2 independent sources per address:
+  //   src1 (curated registry): Jupiter token API — every row `isVerified: true`,
+  //     name/symbol/decimals exact-match, `website: https://www.shiftrwa.xyz/`
+  //     and `icon: https://tokens-data.shiftrwa.xyz/tokens/<TICKER>.png` (an
+  //     issuer-controlled domain, so the metadata is issuer-attested).
+  //   src2 (independent, non-Jupiter): Solana RPC `getAccountInfo` — each mint
+  //     exists, is owned by the Token-2022 program, and reports decimals 8.
+  //
+  // ⚠️  LIQUIDITY IS THIN AND DOC 18 IS WRONG ABOUT IT. Doc 18 cites "~$40M
+  //     liquidity" for the family; measured 2026-07-18, TSL2L showed ~$192 of
+  //     24h volume, ~$477K mcap and 99.19% top-holder concentration. A $5 buy
+  //     is a material fraction of a day's volume — the F11 rig must record
+  //     REAL slippage before these are considered demo-safe.
+  //
+  // SCOPE NOTE — the three live SpaceX Series Tokens (SPCX1L/SPCX2L/SPCX2S) are
+  // deliberately NOT pinned. Doc 18 F11 scopes this to the "2x/3x/inverse
+  // TSLA/NVDA/SPY family"; SpaceX is a PRIVATE company, so the Alpaca-backed
+  // 1:1 custody story that justifies the rest does not obviously hold, and the
+  // risk profile is different in kind. Adding them is a separate decision with
+  // its own verification, not a freebie from this row set.
+  {
+    id: "tsl2l",
+    ticker: "TSL2L",
+    name: "Tesla 2× (leveraged)",
+    kind: "leveraged",
+    chainId: 101,
+    address: "6afjZE5Qv9WF5K1adBgTxtWyenJ7ZerH6BVAzmoSHFT",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: leveragedDisclosure("TSL2L", "2×", "Tesla"),
+    issuer: "Shift",
+    decimals: 8,
+  },
+  {
+    id: "tsl1s",
+    ticker: "TSL1S",
+    name: "Tesla −1× (inverse)",
+    kind: "leveraged",
+    chainId: 101,
+    address: "bNPXng6hSVas7LWiNQyvpGcPYtY1ZmFY6WP49ymSHFT",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: leveragedDisclosure("TSL1S", "−1×", "Tesla"),
+    issuer: "Shift",
+    decimals: 8,
+  },
+  {
+    id: "spx3l",
+    ticker: "SPX3L",
+    name: "S&P 500 3× (leveraged)",
+    kind: "leveraged",
+    chainId: 101,
+    address: "12y35E6btjazuaSjjwq99MobbycbkFsFvm8s5QpaSHFT",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: leveragedDisclosure("SPX3L", "3×", "the S&P 500"),
+    issuer: "Shift",
+    decimals: 8,
+  },
+  {
+    id: "spx3s",
+    ticker: "SPX3S",
+    name: "S&P 500 −3× (inverse)",
+    kind: "leveraged",
+    chainId: 101,
+    address: "67ik3PpEXBJA1km29rZMMKwhgvvjrKpNMoaZyTsSHFT",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: leveragedDisclosure("SPX3S", "−3×", "the S&P 500"),
+    issuer: "Shift",
+    decimals: 8,
+  },
+  {
+    id: "sox3l",
+    ticker: "SOX3L",
+    name: "Semiconductors 3× (leveraged)",
+    kind: "leveraged",
+    chainId: 101,
+    address: "Hyhxfb6riaqCV333GynmnCXCEQK3goTznFj7k4dSHFT",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: leveragedDisclosure("SOX3L", "3×", "the semiconductor index"),
+    issuer: "Shift",
+    decimals: 8,
+  },
+  {
+    id: "sox3s",
+    ticker: "SOX3S",
+    name: "Semiconductors −3× (inverse)",
+    kind: "leveraged",
+    chainId: 101,
+    address: "7GoxZQ7gCh1mg1b3AUqd7cyPqiUp4y2NRxM9A5zSHFT",
+    eligibleRegions: "NON_RESTRICTED",
+    disclosure: leveragedDisclosure("SOX3S", "−3×", "the semiconductor index"),
+    issuer: "Shift",
+    decimals: 8,
+  },
+
   // ── Verified TO PIN — appended after the doc-05 procedure (verified 2026-07-12):
   //    ≥2 independent sources, `Xs` prefix, real Raydium/Jupiter liquidity, issuer
   //    Backed. Source 1 for all five is the k.co.cr xStocks table, PROVEN reliable
@@ -238,6 +363,9 @@ export const REGISTRY: readonly RegistryAsset[] = [
 
 export const REGISTRY_IDS = REGISTRY.map((a) => a.id) as [string, ...string[]]; // doc 09 z.enum input
 export const XS_PREFIX = "Xs";
+/** Shift Series Token vanity suffix (doc 18 F11). A TRIPWIRE ONLY, and a weaker
+ *  one than XS_PREFIX — see the validate.ts branch and the assets warning. */
+export const SHFT_SUFFIX = "SHFT";
 
 // Fake-mint guard at MODULE LOAD (doc 05 DoD): importing the registry with a
 // non-`Xs` equity, a wrong chain, a missing disclosure, or a duplicate id throws
