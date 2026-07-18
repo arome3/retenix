@@ -90,10 +90,20 @@ async function main(): Promise<number> {
     console.error(`[g2] no registry asset with id "${id}"`);
     return 1;
   }
-  const gate = asset.kind === "rwa-gold" ? "G-R1" : "G2";
+  const gate =
+    asset.kind === "rwa-gold" ? "G-R1" : asset.kind === "leveraged" ? "G-L1" : "G2";
   console.log(
     `[${gate}] target ${asset.ticker} — pinned address ${asset.address} (chain ${asset.chainId})`,
   );
+  if (asset.kind === "leveraged") {
+    console.log(
+      "[G-L1] leveraged Series Token (doc 18 F11). LIQUIDITY IS THIN — TSL2L " +
+        "measured ~$192 of 24h volume and 99.19% top-holder concentration on " +
+        "2026-07-18, ~200x below doc 18's '~$40M' claim. A $5 buy is a material " +
+        "fraction of a day's volume: RECORD THE REALIZED SLIPPAGE below, and run " +
+        "the SELL half too — a mint that cannot be sold must not stay pinned.",
+    );
+  }
   if (asset.kind === "rwa-gold") {
     console.log(
       "[G-R1] gold buy (doc 20). G-R3: confirm received-vs-quoted within tolerance " +

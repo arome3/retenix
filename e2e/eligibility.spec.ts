@@ -43,6 +43,11 @@ const CORRECT = [
   "token that tracks the price",
   "like any investment, and it also depends on the issuer",
   "Around the clock",
+  // Q4 (doc 18 F11) — the daily-reset decay question that unlocks leveraged
+  // assets. Deliberately worded without "leverage" (G12 reserves that word
+  // for the F12 compliance surface), so the banned-vocab walk below stays
+  // clean through this screen too.
+  "it resets daily",
 ];
 
 test.afterAll(closeDb);
@@ -60,6 +65,8 @@ async function answerQuiz(page: Page): Promise<void> {
   await page.getByText(CORRECT[1]).click();
   await expect(page).toHaveURL(/\/eligibility\/quiz\/3$/);
   await page.getByText(CORRECT[2]).click();
+  await expect(page).toHaveURL(/\/eligibility\/quiz\/4$/);
+  await page.getByText(CORRECT[3]).click();
   await expect(page).toHaveURL(/\/eligibility\/identity$/);
 }
 
@@ -294,6 +301,8 @@ test.describe("compliance surfaces", () => {
       await page.getByText(CORRECT[1]).click();
       await assertClean("quiz/3");
       await page.getByText(CORRECT[2]).click();
+      await assertClean("quiz/4");
+      await page.getByText(CORRECT[3]).click();
       await assertClean("identity");
       await fillIdentity(page);
       await assertClean("risk");
