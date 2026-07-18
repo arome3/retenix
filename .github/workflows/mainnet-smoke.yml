@@ -1,0 +1,103 @@
+# mainnet-smoke.yml — the daily $1 mainnet convert smoke (TS-14.6 / doc 16 §Continuous smoke).
+#
+# OWNERSHIP: doc 17 owns the canonical workflow file + the Slack webhook; doc 16
+# (this module) DRIVES its schedule + assertions + the budget contract. Authored
+# here because the Definition of Done needs the smoke green ≥5 consecutive days
+# pre-demo and doc 17 is not yet stood up — module 17 may later assume this file.
+#
+# WHAT IT DOES (doc 16 §Continuous smoke): runs doc 03's smoke script via
+# walletSigner → polls to FINISHED → asserts the fee parse → posts to Slack.
+# The FINISHED + fee-parse assertion lives INSIDE packages/ua/scripts/smoke.ts
+# (it exits non-zero on anything but FINISHED), so the job just asserts exit 0.
+# Purpose: catch V2-migration surprises within 24h AND guard the UA SDK 2.0.3
+# exact pin (G1 tripwire). Red smoke = STOP feature work, diagnose (doc 16).
+#
+# BUDGET (doc 16 §Budget enforcement / G7 — UA has no testnet, mainnet only):
+#   - the smoke wallet holds ≤ $50 total (hard bound by funding, the maximum
+#     possible loss from any CI malfunction — never raise it, never point at a
+#     user account);
+#   - SMOKE_CONVERT_USD=1 per run, ONE scheduled run/day (concurrency-guarded)
+#     ⇒ ≤ $1/day ≤ CI_DAILY_BUDGET_USD (5);
+#   - the preflight below refuses to run on gross mis-funding (a tripwire, not
+#     the cap — the cap is the funding itself).
+name: mainnet-smoke
+
+on:
+  schedule:
+    # 13:00 UTC daily during the hackathon. Adjust/disable post-demo.
+    - cron: "0 13 * * *"
+  workflow_dispatch: # manual "is the smoke green today?" (demo-day checklist)
+
+# One convert at a time — daily spend stays a single $1 convert even if a manual
+# run overlaps the cron.
+concurrency:
+  group: mainnet-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Mis-funding tripwire (doc 17): refuse to spend if the smoke wallet holds
+      # far more native than a $50 wallet ever should. The USD cap is enforced by
+      # funding (G7); this only catches "someone sent real money here by mistake".
+      - name: budget preflight
+        working-directory: packages/ua
+        env:
+          SMOKE_WALLET_PRIVATE_KEY: ${{ secrets.SMOKE_WALLET_PRIVATE_KEY }}
+          RPC_URL_ARBITRUM: ${{ secrets.RPC_URL_ARBITRUM }}
+          # Generous native ceiling — well above what ≤$50 buys, so it only trips
+          # on gross mis-funding, never on a correctly-funded wallet.
+          SMOKE_WALLET_MAX_NATIVE_ETH: "0.05"
+        run: |
+          node --input-type=module -e '
+            import { Wallet, JsonRpcProvider, formatEther, parseEther } from "ethers";
+            const key = process.env.SMOKE_WALLET_PRIVATE_KEY;
+            const rpc = process.env.RPC_URL_ARBITRUM;
+            if (!key || !rpc) { console.error("[preflight] missing SMOKE_WALLET_PRIVATE_KEY / RPC_URL_ARBITRUM"); process.exit(1); }
+            const w = new Wallet(key);
+            const bal = await new JsonRpcProvider(rpc).getBalance(w.address);
+            const ceil = parseEther(process.env.SMOKE_WALLET_MAX_NATIVE_ETH ?? "0.05");
+            console.log(`[preflight] ${w.address} native=${formatEther(bal)} ETH (ceiling ${formatEther(ceil)})`);
+            if (bal > ceil) { console.error("[preflight] REFUSING — native balance exceeds the mis-funding ceiling ($50 cap is the funding itself, G7)."); process.exit(1); }
+            console.log("[preflight] OK — within the budget envelope.");
+          '
+
+      # The convert. smoke.ts asserts FINISHED + parses fees; exit 0 == green.
+      - name: $1 mainnet convert
+        id: smoke
+        env:
+          PARTICLE_PROJECT_ID: ${{ secrets.PARTICLE_PROJECT_ID }}
+          PARTICLE_CLIENT_KEY: ${{ secrets.PARTICLE_CLIENT_KEY }}
+          PARTICLE_APP_UUID: ${{ secrets.PARTICLE_APP_UUID }}
+          SMOKE_WALLET_PRIVATE_KEY: ${{ secrets.SMOKE_WALLET_PRIVATE_KEY }}
+          SMOKE_CONVERT_USD: "1"
+        run: pnpm --filter @retenix/ua smoke
+
+      # Post the outcome to the Slack status webhook (doc 17). Informational-only
+      # if the webhook isn't configured — never fails the job.
+      - name: post result to Slack
+        if: always()
+        env:
+          SLACK_STATUS_WEBHOOK_URL: ${{ secrets.SLACK_STATUS_WEBHOOK_URL }}
+          OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          if [ -z "${SLACK_STATUS_WEBHOOK_URL}" ]; then
+            echo "no SLACK_STATUS_WEBHOOK_URL — skipping Slack post"
+            exit 0
+          fi
+          if [ "${OUTCOME}" = "success" ]; then
+            TEXT=":white_check_mark: mainnet-smoke green — \$1 convert FINISHED (run ${GITHUB_RUN_ID})"
+          else
+            TEXT=":rotating_light: mainnet-smoke RED — \$1 convert did not FINISH. STOP feature work, diagnose. (run ${GITHUB_RUN_ID})"
+          fi
+          curl -sS -X POST -H 'content-type: application/json' \
+            --data "{\"text\":\"${TEXT}\"}" "${SLACK_STATUS_WEBHOOK_URL}" || true
