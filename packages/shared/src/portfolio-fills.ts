@@ -8,6 +8,7 @@ import { computeLegs } from "./basket";
 import {
   acceptableAddresses,
   extractFillQty,
+  isChainScanned,
   parseSeqFromPeriodKey,
   QTY_EPSILON,
   type Fill,
@@ -256,7 +257,10 @@ export function accumulateTokenAccounts(
 ): void {
   const byMint = new Map<string, string>();
   for (const asset of assets) {
-    if (asset.kind === "equity" && asset.chainId === 101) {
+    // isChainScanned, not a local `kind === "equity"` test: holdings.ts's
+    // ledgerTrackedPositions is the exact COMPLEMENT of this loop, and the two
+    // must move together or an asset is enumerated twice or not at all.
+    if (isChainScanned(asset)) {
       byMint.set(asset.address, asset.id);
     }
   }

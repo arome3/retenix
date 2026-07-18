@@ -28,15 +28,40 @@ export const PORTFOLIO_HOLDINGS_CACHE_TTL_MS = 30_000;
 // ---------------------------------------------------------------------------
 
 /** The registry slice this module needs — callers pass REGISTRY entries.
- *  `kind` mirrors the registry union (doc 20 added "rwa-gold"). */
+ *  `kind` mirrors the registry union (doc 20 added "rwa-gold"; doc 18 added
+ *  "leveraged"). */
 export interface PortfolioAssetMeta {
   id: string;
   ticker: string;
   name: string;
-  kind: "equity" | "crypto" | "rwa-gold";
+  kind: "equity" | "crypto" | "rwa-gold" | "leveraged";
   chainId: number;
   address: string;
   disclosure?: string;
+}
+
+/** Kinds whose balance comes from a REAL Solana token-account scan rather than
+ *  the execution ledger.
+ *
+ *  This predicate exists so the two enumeration halves can never disagree:
+ *  `accumulateTokenAccounts` (portfolio-fills) includes exactly these, and
+ *  `ledgerTrackedPositions` (holdings) excludes exactly these. Before doc 18
+ *  both sites hardcoded `kind === "equity"` independently, so adding a fourth
+ *  Solana kind would have made it ledger-tracked — silently giving it a float
+ *  `qtyHuman` instead of the exact RPC uiAmountString, which leaves dust on a
+ *  sell-all, and hiding any balance the user acquired outside Retenix.
+ *
+ *  Gold stays ledger-tracked because chain 1 has no balance scan in v1 (doc 20
+ *  deviation 2) — this is about which assets a scan EXISTS for, not about kind. */
+export const SOLANA_SCANNED_KINDS = ["equity", "leveraged"] as const;
+
+export function isChainScanned(
+  a: Pick<PortfolioAssetMeta, "kind" | "chainId">,
+): boolean {
+  return (
+    a.chainId === 101 &&
+    (SOLANA_SCANNED_KINDS as readonly string[]).includes(a.kind)
+  );
 }
 
 /** One executed trade, normalized from executions (buys) or events (sells). */
