@@ -58,7 +58,7 @@ import {
 
 import { computeLegs, type BasketLeg } from "./basket";
 import { EXECUTE_QUEUE, RETRY_BACKOFF_SECS, type BossLike } from "./ctx";
-import { breadcrumb, captureError, recordEvent, slack } from "./notify";
+import { breadcrumb, captureError, executionRef, recordEvent, slack } from "./notify";
 import {
   PLAN_STATUS,
   type IntentState,
@@ -304,6 +304,20 @@ class LegRun {
   private readonly sleep: (ms: number) => Promise<void>;
   private qj: ExecQuoteJson = { attempt: 1 };
   private execId: string | null = null;
+
+  /**
+   * doc 17: "Every message links the execution row and the tx." The execution
+   * row is its UUID rather than a URL — doc 11's /activity takes no query
+   * parameter, so a deep link would 404, and the UUID is what an operator
+   * actually selects on when a Slack message wakes them up.
+   */
+  private ref(uaTxId?: string | null): string {
+    return executionRef({
+      executionId: this.execId,
+      planId: this.ctx.planId,
+      uaTxId: uaTxId ?? null,
+    });
+  }
 
   constructor(
     private readonly deps: ExecutorDeps,
@@ -676,7 +690,7 @@ class LegRun {
       legUsd: this.leg.usd,
     });
     await slack(
-      `:hourglass_flowing_sand: UNRESOLVED buy — ${this.ticker} $${this.leg.usd}, UA tx not terminal after ${POLL_CEILING_MS / 60_000} min. No refund issued (a late completion would deflate the period cap). Needs a human: ${activityUrl(transactionId)}`,
+      `:hourglass_flowing_sand: UNRESOLVED buy — ${this.ticker} $${this.leg.usd}, UA tx not terminal after ${POLL_CEILING_MS / 60_000} min. No refund issued (a late completion would deflate the period cap). Needs a human.${this.ref(transactionId)}`,
     );
   }
 
@@ -763,7 +777,7 @@ class LegRun {
       asset: this.leg.assetId,
     });
     await slack(
-      `:no_entry: ${receiptText} — plan ${this.ctx.planId}, ${this.ticker} $${this.leg.usd}`,
+      `:no_entry: ${receiptText} — ${this.ticker} $${this.leg.usd}${this.ref()}`,
     );
     breadcrumb("terminal:blocked", { reason });
   }
@@ -784,7 +798,7 @@ class LegRun {
       topUpOptIn: this.params.topUpOptIn ?? false,
     });
     await slack(
-      `:octagonal_sign: plan ${this.ctx.planId} ${cause} mid-flight — ${this.ticker} $${this.leg.usd} leg halted before the send; period budget refunded`,
+      `:octagonal_sign: plan ${cause} mid-flight — ${this.ticker} $${this.leg.usd} leg halted before the send; period budget refunded${this.ref()}`,
     );
   }
 
@@ -871,7 +885,7 @@ class LegRun {
       legUsd: this.leg.usd,
     });
     await slack(
-      `:x: ${this.ticker} $${this.leg.usd} leg exhausted its retries (${this.qj.cause ?? "unknown"}) — receipt written, job skipped. Plan ${this.ctx.planId}.`,
+      `:x: ${this.ticker} $${this.leg.usd} leg exhausted its retries (${this.qj.cause ?? "unknown"}) — receipt written, job skipped.${this.ref()}`,
     );
     breadcrumb("step7:exhausted", {});
   }
@@ -894,7 +908,7 @@ class LegRun {
         jobId: this.ctx.jobId,
       });
       await slack(
-        `:rotating_light: refundExecution REVERTED (${settled.reason}) for plan ${this.ctx.planId} — period budget left spent; check agent wiring`,
+        `:rotating_light: refundExecution REVERTED (${settled.reason}) — period budget left spent; check agent wiring${this.ref()}`,
       );
     }
     breadcrumb("step7:refunded", { cause });
