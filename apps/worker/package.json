@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
-    "build": "tsc -b",
+    "build": "tsc -b && node ../../scripts/check-worker-runtime-deps.mjs",
     "start": "tsx --env-file-if-exists=.env src/index.ts",
     "smoke:kms": "tsx --env-file-if-exists=.env scripts/smoke-kms.ts",
     "rehearse:staging": "tsx --env-file-if-exists=.env scripts/rehearse-staging-plan.ts",
@@ -29,11 +29,11 @@
     "node-cron": "^4",
     "p-queue": "^9.3.1",
     "pg-boss": "^12",
+    "tsx": "^4",
     "zod": "^4"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "tsx": "^4",
     "typescript": "^5",
     "vitest": "^4"
   }
