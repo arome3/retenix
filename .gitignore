@@ -26,8 +26,20 @@ test-results/
 *.log
 
 # plans & module prompts — local only (owner decision 2026-07-10); the folder
-# stays on disk and in editor search, it just never enters version control
-/docs/
+# stays on disk and in editor search, it just never enters version control.
+#
+# `/docs/*` and not `/docs/`: git cannot re-include a file whose PARENT
+# DIRECTORY is excluded — it never descends, so negations inside have no effect.
+# Excluding the entries individually is what makes the four exceptions below
+# possible. Those four are judge-facing by requirement (TS-15.7: "bounty
+# writeups in /docs"); everything else — 22 module docs, 24 prompts, HANDOFF,
+# notes/, references/, CONFLICTS, traceability, index — stays private.
+# scripts/check-docs-tracked.mjs fails CI if that list ever grows by accident.
+/docs/*
+!/docs/writeup-ua-track.md
+!/docs/writeup-arbitrum.md
+!/docs/writeup-magic.md
+!/docs/deployments.md
 
 # root-level plans, specs, and prompt sources — local only, same decision as /docs/
 /broker-agent-blueprint.md
