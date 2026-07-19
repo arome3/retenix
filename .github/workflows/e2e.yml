@@ -79,7 +79,7 @@ jobs:
       - name: axe (WCAG 2.2 AA)
         run: pnpm exec playwright test --config e2e/playwright.config.ts e2e/a11y-shell.spec.ts
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -115,7 +115,7 @@ jobs:
           GOLDEN_PATH_LIVE: "1"
           DEMO_MODE: "1"
         run: pnpm exec playwright test --config e2e/playwright.config.ts e2e/golden-path.spec.ts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report-staging
