@@ -142,6 +142,7 @@ export const plansRouter = router({
         accept: input.accept,
         edits: input.edits,
         region: ctx.session.region,
+        leveragedUnlocked: ctx.session.leveragedUnlocked,
       });
       if (!resolved.ok) {
         throw new TRPCError({ code: "BAD_REQUEST", message: resolved.reason });
@@ -202,6 +203,7 @@ export const plansRouter = router({
         accept: payload.accept,
         edits: payload.edits,
         region,
+        leveragedUnlocked: ctx.session.leveragedUnlocked,
       });
       if (!resolved.ok) {
         throw new TRPCError({ code: "BAD_REQUEST", message: resolved.reason });
@@ -510,7 +512,12 @@ export const plansRouter = router({
     .input(plansRecreatePayloadSchema.pick({ planId: true, edits: true }))
     .query(async ({ ctx, input }): Promise<PrepareRecreate> => {
       const plan = await requireBrokerToRecreate(ctx.db, ctx.session.userId, input.planId);
-      const resolved = resolveRecreate(plan, input.edits.broker, ctx.session.region);
+      const resolved = resolveRecreate(
+        plan,
+        input.edits.broker,
+        ctx.session.region,
+        ctx.session.leveragedUnlocked,
+      );
       if (!resolved.ok || !resolved.onchain) {
         throw new TRPCError({ code: "BAD_REQUEST", message: resolved.ok ? "no onchain plan" : resolved.reason });
       }
@@ -550,7 +557,12 @@ export const plansRouter = router({
       const payload = input.payload as PlansRecreatePayload;
       const owner = ctx.session.eoaAddr;
       const plan = await requireBrokerToRecreate(ctx.db, ctx.session.userId, payload.planId);
-      const resolved = resolveRecreate(plan, payload.edits.broker, ctx.session.region);
+      const resolved = resolveRecreate(
+        plan,
+        payload.edits.broker,
+        ctx.session.region,
+        ctx.session.leveragedUnlocked,
+      );
       if (!resolved.ok || !resolved.onchain || !resolved.broker) {
         throw new TRPCError({ code: "BAD_REQUEST", message: resolved.ok ? "nothing to recreate" : resolved.reason });
       }
@@ -840,6 +852,7 @@ function resolveRecreate(
   plan: BrokerToRecreate,
   edit: BrokerSection,
   region: string,
+  leveragedUnlocked: boolean,
 ): ActivateResolution {
   // Synthetic draft = the card's current sections; the edit overrides broker.
   const draft = {
@@ -851,6 +864,7 @@ function resolveRecreate(
     accept: { broker: true, guardian: Boolean(plan.guardian), legacy: false },
     edits: { broker: edit },
     region,
+    leveragedUnlocked,
   });
 }
 

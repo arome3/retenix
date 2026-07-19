@@ -49,8 +49,8 @@ export function RegionStep() {
             Tokenized stocks aren&apos;t available in your region
           </h1>
           <p className="text-body text-muted-foreground">
-            You can still invest in a crypto basket — SOL and ETH — with the same
-            automation and the same controls.
+            You can still invest in a crypto basket — SOL and ETH — plus
+            tokenized gold, with the same automation and the same controls.
           </p>
         </header>
         <Button className="w-full" onClick={() => router.push(NEXT)}>

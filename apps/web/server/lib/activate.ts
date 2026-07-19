@@ -4,7 +4,7 @@
 // onchain params. The router does the DB writes and the relay; this decides
 // WHAT gets written, re-validating every value against doc 09's schema and the
 // user's region (client-edited values re-enter the same wall).
-import { eligibleAssets } from "@retenix/registry";
+import { eligibleAssets, type AssetAccess } from "@retenix/registry";
 import {
   brokerSectionSchema,
   guardianSectionSchema,
@@ -54,8 +54,9 @@ export type ActivateResolution =
 function normalizeBrokerEdit(
   broker: BrokerSection,
   region: string,
+  access: AssetAccess,
 ): BrokerSection | null {
-  const eligible = new Set(eligibleAssets(region).map((a) => a.id));
+  const eligible = new Set(eligibleAssets(region, access).map((a) => a.id));
   let legs = broker.basket
     .filter((l) => l.pct > 0 && eligible.has(l.assetId))
     .map((l) => ({ ...l }));
@@ -88,10 +89,13 @@ export function resolveActivation(args: {
   accept: ActivateAccept;
   edits?: ActivateEdits;
   region: string;
+  /** doc 18 F11 — omitted means locked (fail-closed), never "allow". */
+  leveragedUnlocked?: boolean;
 }): ActivateResolution {
   const { draft, accept, edits, region } = args;
+  const access: AssetAccess = { leveragedUnlocked: args.leveragedUnlocked };
   const regionSchema = policyDraftFor(
-    eligibleAssets(region).map((a) => a.id) as [string, ...string[]],
+    eligibleAssets(region, access).map((a) => a.id) as [string, ...string[]],
   );
 
   // --- broker ---
@@ -101,7 +105,7 @@ export function resolveActivation(args: {
     if (!raw) return { ok: false, reason: "no broker section to activate" };
     // PS-F4.1: the $1 floor the draft schema doesn't enforce (module 09 note).
     if (raw.amountUsd < 1) return { ok: false, reason: "broker amount below $1" };
-    const normalized = normalizeBrokerEdit(raw, region);
+    const normalized = normalizeBrokerEdit(raw, region, access);
     if (!normalized) {
       return { ok: false, reason: "broker basket empty after region filter" };
     }

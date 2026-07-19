@@ -61,3 +61,25 @@ simpler and is what doc 07 assumes ("Chainlink registration is UI/CLI").
 - The Retenix-is-dark story: pause the worker entirely — the deadline still
   fires, because only Chainlink (or anyone, via permissionless
   `fireDeadline`) is needed.
+
+## Module 14 estate runbook (owner-run, W1/demo week)
+
+1. **OQ6 (TS-17.6)**: at the registration screen, note the ACTUAL Arbitrum
+   premium % (parsed ~50%) and size the LINK deposit from it. Record the
+   number in HANDOFF/doc 16's runbook; pre-check the upkeep balance in the
+   demo-day checklist.
+2. Until the upkeep is registered, the worker keeper fires due deadlines
+   itself (`keeper.ts` — fireDeadline is permissionless; a liveness belt,
+   never the guarantee). After registration, prove the chaos split (doc 14
+   DoD): **stop the worker**, let a demo estate lapse, and confirm the
+   upkeep alone moves it to Countdown/Claimable; restart the worker and
+   watch it complete the claim later.
+3. The claim delegates are separate deployments (`DeployClaim.s.sol`, one per
+   estate chain — addresses in `docs/deployments.md`; Ethereum/Base/BSC/
+   X Layer are pending the funded deployer). RetenixClaim's `keeper` is
+   IMMUTABLE: rotating the keeper key means redeploying delegates on every
+   chain, and inactive owners' escrowed tuples keep pointing at the OLD
+   delegate — the old delegate + old keeper key must stay operational for
+   them (ops invariant).
+4. Verify X Layer supports type-4 (EIP-7702) transactions before counting it
+   in live estate coverage — flagged in HANDOFF (doc 14).

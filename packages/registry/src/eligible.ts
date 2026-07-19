@@ -10,6 +10,31 @@
 import { isAssetEligibleInRegion } from "@retenix/shared";
 import { REGISTRY, type RegistryAsset } from "./assets";
 
-export function eligibleAssets(region: string): readonly RegistryAsset[] {
-  return REGISTRY.filter((a) => isAssetEligibleInRegion(a.eligibleRegions, region));
+/**
+ * The SECOND, orthogonal dimension (doc 18 F11). Region says *where* an asset
+ * may be sold; this says *to whom*.
+ *
+ * Leverage appropriateness is a property of the USER (did they answer the decay
+ * question?), not of the region, so it deliberately does NOT become a fourth
+ * `AssetEligibility` value — that union is a pure region function with no user
+ * in scope, and overloading it would be a category error.
+ */
+export interface AssetAccess {
+  /** Set from `isLeverageUnlocked(storedQuizAnswers)`. DEFAULTS FALSE — every
+   *  call site keeps compiling and stays FAIL-CLOSED until reviewed, so a
+   *  forgotten caller hides leveraged assets rather than exposing them. */
+  leveragedUnlocked?: boolean;
+}
+
+const LEVERAGED_KINDS: ReadonlySet<string> = new Set(["leveraged"]);
+
+export function eligibleAssets(
+  region: string,
+  access: AssetAccess = {},
+): readonly RegistryAsset[] {
+  return REGISTRY.filter((a) => {
+    if (!isAssetEligibleInRegion(a.eligibleRegions, region)) return false;
+    if (LEVERAGED_KINDS.has(a.kind)) return access.leveragedUnlocked === true;
+    return true;
+  });
 }

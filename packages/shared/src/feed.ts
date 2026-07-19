@@ -79,7 +79,9 @@ export function executionVariant(status: ExecutionStatus): FeedVariant | null {
  *  aggregate, doc 13); estate.checkin is module 14's forward contract. All
  *  carry a display-ready `receipt` string — in-flight kill legs deliberately
  *  lack it and are skipped until terminal. sell.receipt is doc 12's
- *  flag-gated sell-from-detail (same rule). */
+ *  flag-gated sell-from-detail (same rule). send.receipt/send.received are
+ *  module 15's sender/recipient rows (send.authorized/send.invited stay
+ *  audit-only). */
 export const FEED_EVENT_TYPES = [
   "plan.activated",
   "plan.revoked",
@@ -87,9 +89,15 @@ export const FEED_EVENT_TYPES = [
   "plan.resumed",
   "sweep.receipt",
   "sell.receipt",
+  "send.receipt",
+  "send.received",
   "kill.leg",
   "kill.receipt",
   "estate.checkin",
+  "estate.enrolled",
+  "estate.countdown_started",
+  "estate.activity_noticed",
+  "estate.claimed",
 ] as const;
 export type FeedEventType = (typeof FEED_EVENT_TYPES)[number];
 

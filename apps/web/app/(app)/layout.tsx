@@ -1,3 +1,4 @@
+import { CountdownBanner } from "@/components/CountdownBanner";
 import { CountdownBannerSlot } from "@/components/CountdownBannerSlot";
 import { SkipToContent } from "@/components/SkipToContent";
 import { TabBar } from "@/components/TabBar";
@@ -15,7 +16,7 @@ export default async function AppLayout({
 }) {
   // Authoritative session + region check (doc 02). proxy.ts already redirected
   // the common cases; this is what a forged cookie runs into.
-  await requireSession();
+  const session = await requireSession();
 
   return (
     <>
@@ -23,6 +24,8 @@ export default async function AppLayout({
       <ThemeScope defaultMode="dark" />
       <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col">
         <CountdownBannerSlot />
+        {/* C8 (doc 14) — portals into the slot above while a countdown is live */}
+        <CountdownBanner eoa={session.eoa} />
         <main
           id="main"
           className="flex-1 px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1.5rem)] md:px-6"

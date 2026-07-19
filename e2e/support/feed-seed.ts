@@ -130,3 +130,46 @@ export async function seedPlanWithJob(
   const jobId = await seedJob(planId);
   return { planId, jobId };
 }
+
+/** The mixed three-class demo basket (doc 20 beat 3): equity + gold + crypto. */
+export const MIXED_BASKET_PARAMS = {
+  cadence: "weekly",
+  amountUsd: 25,
+  basket: [
+    { assetId: "spyx", pct: 60 },
+    { assetId: "paxg", pct: 20 },
+    { assetId: "sol", pct: 20 },
+  ],
+  capPerExecUsd: 15,
+  capPerPeriodUsd: 25,
+  periodSecs: 604_800,
+  nextRunAt: "2026-07-23T12:00:00.000Z",
+  autonomy: "auto",
+  topUpOptIn: false,
+} as const;
+
+/**
+ * Seed a FINISHED tokenized-gold (PAXG) buy so the demo/e2e holds gold (doc 20).
+ * The `quote_json.fill` is what the holdings route + snapshot cron read to
+ * attribute basis and enumerate the position (HANDOFF §12) — an empty quote_json
+ * would render as an unattributed buy with basis suppressed. Module 16's demo
+ * seed uses this so /home shows a gold row with its disclosure line.
+ */
+export async function seedGoldHolding(
+  user: TestUser,
+  opts: { usd?: number; qty?: number; createdAt?: Date } = {},
+): Promise<{ planId: string; jobId: string; executionId: string }> {
+  const usd = opts.usd ?? 5;
+  const qty = opts.qty ?? 0.00125; // ~$5 of gold at ~$4000/oz
+  const planId = await seedPlan(user, { params: MIXED_BASKET_PARAMS });
+  const jobId = await seedJob(planId);
+  const executionId = await seedExecution(jobId, {
+    status: "finished",
+    receiptText: `Bought $${usd.toFixed(2)} of PAXG · funded from Ethereum · fees $0.00 · view onchain`, // copy-canon-allow
+    uaTxId: `demo-paxg-${randomUUID()}`,
+    feesJson: { gas: 0, service: 0, lp: 0, total: 0 },
+    quoteJson: { fill: { assetId: "paxg", usd, qty } },
+    createdAt: opts.createdAt,
+  });
+  return { planId, jobId, executionId };
+}

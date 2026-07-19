@@ -1,5 +1,9 @@
 import { events, getDb, users } from "@retenix/db";
-import { COMPLIANCE_EVENTS, COMPLIANCE_QUIZ } from "@retenix/shared";
+import {
+  COMPLIANCE_EVENTS,
+  COMPLIANCE_QUIZ,
+  GATE_COMPLIANCE_EVENTS,
+} from "@retenix/shared";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GATE_COOKIE } from "@/lib/session";
@@ -240,9 +244,16 @@ describe("gate steps are idempotent / re-submittable", () => {
     await caller(user).compliance.acknowledgeRisk();
 
     expect(await regionOf(user.userId)).toBe("DE");
-    for (const type of Object.values(COMPLIANCE_EVENTS)) {
+    // GATE events only. compliance.hedge_acknowledged (doc 19) is a mid-app
+    // acknowledgment, not a gate step — a user who never enables Hedge mode has
+    // zero of them, so looping over ALL of COMPLIANCE_EVENTS would assert
+    // something the gate flow never promised.
+    for (const type of GATE_COMPLIANCE_EVENTS) {
       expect(await countEvents(user.userId, type)).toBe(1);
     }
+    expect(
+      await countEvents(user.userId, COMPLIANCE_EVENTS.hedgeAcknowledged),
+    ).toBe(0);
   });
 });
 

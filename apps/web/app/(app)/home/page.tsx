@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BuyingPowerHeader } from "@/components/BuyingPowerHeader";
+import { HomeMenu } from "@/components/HomeMenu";
 import { KillSwitchSlot } from "@/components/KillSwitchSlot";
 import { MiniFeed } from "@/components/MiniFeed";
 import { PortfolioSection } from "@/components/PortfolioSection";
@@ -23,7 +24,11 @@ export default async function HomePage() {
     <div className="space-y-8 py-6">
       <header className="flex items-start justify-between gap-4">
         <BuyingPowerHeader />
-        <KillSwitchSlot />
+        <div className="flex items-center gap-2">
+          <KillSwitchSlot />
+          {/* doc 15 PROPOSED entry: send/withdraw live behind ONE ⋯ trigger */}
+          <HomeMenu />
+        </div>
       </header>
 
       <SweepPromptCard eoa={session.eoa} />

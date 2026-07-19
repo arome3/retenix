@@ -14,9 +14,28 @@
 // the registry's mint-verification procedure (G11) — ETH resolves via
 // last-trade only in v1 (flagged in HANDOFF).
 //
-// Marks are DISPLAY-ONLY by construction: nothing here touches execution
-// pricing (executions price via UA quotes, doc 08). A poisoned feed can
-// mislead a chart, never move money.
+// Marks are DISPLAY-ONLY FOR PRICING: nothing here touches execution pricing
+// (executions price via UA quotes, doc 08). A poisoned feed can never set the
+// price at which money moves.
+//
+// ⚠ AMENDED 2026-07-18 (doc 19, F12). That sentence used to read "a poisoned
+// feed can mislead a chart, never move money", and doc 19's drawdown trigger
+// makes the second half no longer literally true — it is the ONE sanctioned
+// consumer that ACTS on a mark. Amended rather than quietly contradicted,
+// because the original was load-bearing and the exploit that took our intended
+// hedge venue offline was itself an oracle manipulation.
+//
+// The bound that replaces it, enforced in drawdown.ts and NOT here:
+//   * stale marks (the last-trade fallback) can never fire a trigger — a feed
+//     outage degrades to inaction, never to action;
+//   * a single mark that jumps beyond JUMP_GUARD_PCT is classed UNUSABLE, not
+//     triggering, so one poisoned tick cannot fire anything;
+//   * a crossing must persist across CONFIRMATIONS_REQUIRED separate reads
+//     spanning MIN_CONFIRM_SPAN_MS, so a transient poison heals first;
+//   * the resulting action is bounded onchain by RetenixHedge to a capped,
+//     short-only, owner-ceiling-limited, auto-closing position — reversible by
+//     construction, and never a sale.
+// Anything else that wants to act on a mark must extend that list first.
 
 import { SOL_NATIVE_MINT, type MarkValue } from "./portfolio";
 

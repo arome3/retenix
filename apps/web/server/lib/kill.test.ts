@@ -15,6 +15,7 @@ import {
 const spyx = REGISTRY.find((a) => a.id === "spyx")!;
 const tslax = REGISTRY.find((a) => a.id === "tslax")!;
 const nvdax = REGISTRY.find((a) => a.id === "nvdax")!;
+const paxg = REGISTRY.find((a) => a.id === "paxg")!;
 
 const mark = (usd: number): MarkValue => ({ usd, stale: false, source: "jupiter" });
 
@@ -22,6 +23,7 @@ const MARKS = new Map<string, MarkValue>([
   ["spyx", mark(650)],
   ["tslax", mark(320)],
   ["nvdax", mark(180)],
+  ["paxg", mark(4000)], // ~1 troy oz of gold
 ]);
 
 const primary = (
@@ -155,6 +157,68 @@ describe("planKillLegs", () => {
       legs: [],
       skipped: [],
     });
+  });
+
+  // ── Tokenized gold (doc 20): rwa-gold liquidates like an equity — a sell leg
+  //    to USDC on Ethereum — NOT subsumed by a primary convert (it isn't one). ──
+  it("a gold (rwa-gold) position becomes a SELL leg on Ethereum, not a skip", () => {
+    const { legs, skipped } = planKillLegs({
+      positions: [{ assetId: "paxg", qty: 0.01, qtyHuman: "0.01" }],
+      primaries: [],
+      marks: MARKS,
+    });
+    expect(skipped).toEqual([]);
+    expect(legs).toHaveLength(1);
+    expect(legs[0]).toMatchObject({
+      kind: "sell",
+      assetId: "paxg",
+      symbol: "PAXG",
+      chainId: 1,
+      network: "Ethereum",
+      token: paxg.address,
+      amountHuman: "0.01",
+      usdEst: 40, // 0.01 * $4000
+    });
+  });
+
+  it("gold sell-all qty reaches the leg byte-identical (no float round-trip)", () => {
+    const qtyHuman = "0.012345678901234567"; // 18-dp PAXG
+    const { legs } = planKillLegs({
+      positions: [{ assetId: "paxg", qty: 0.012345678901234567, qtyHuman }],
+      primaries: [],
+      marks: MARKS,
+    });
+    expect(legs[0].amountHuman).toBe(qtyHuman);
+  });
+
+  it("mixed three-class kill: equity sell + gold sell + crypto convert", () => {
+    const { legs, skipped } = planKillLegs({
+      positions: [
+        { assetId: "spyx", qty: 0.05, qtyHuman: "0.05" },
+        { assetId: "paxg", qty: 0.01, qtyHuman: "0.01" },
+      ],
+      primaries: [primary("sol", 8), primary("usdc", 20)],
+      marks: MARKS,
+    });
+    expect(skipped).toEqual([]);
+    // spyx sell (Solana) + paxg sell (Ethereum) + sol convert; USDC untouched.
+    expect(legs.map((l) => `${l.kind}:${l.assetId}`)).toEqual([
+      "sell:spyx",
+      "sell:paxg",
+      "convert:sol",
+    ]);
+    const goldLeg = legs.find((l) => l.assetId === "paxg")!;
+    expect(goldLeg.chainId).toBe(1);
+    expect(goldLeg.network).toBe("Ethereum");
+  });
+
+  it("gold with no mark → usdEst null (never a guessed number)", () => {
+    const { legs } = planKillLegs({
+      positions: [{ assetId: "paxg", qty: 0.01, qtyHuman: "0.01" }],
+      primaries: [],
+      marks: new Map(),
+    });
+    expect(legs[0].usdEst).toBeNull();
   });
 });
 

@@ -54,3 +54,33 @@ export const RETENIX_NETWORK_COUNT = 6 as const;
 export function isSupportedChain(chainId: number): boolean {
   return (RETENIX_CHAIN_IDS as readonly number[]).includes(chainId);
 }
+
+// --- Withdraw network derivation (doc 15) ---------------------------------
+//
+// Withdraw (the single sanctioned network-choice surface, CONFLICTS #16) may
+// only offer networks where the chosen asset actually exists as a primary
+// token. Derived from the SDK's own SUPPORTED_PRIMARY_TOKENS — never a
+// hand-pinned list — and returned in tech-spec §3 chain order so the UI list
+// is stable. X Layer carries zero primary tokens in 2.0.3, so it never
+// appears; if a future SDK adds one, the list updates itself.
+
+/** Chain ids (spec §3 order) where `asset` exists as a primary token. */
+export function networksForAsset(asset: SUPPORTED_TOKEN_TYPE): number[] {
+  const chains = new Set<number>();
+  for (const t of SUPPORTED_PRIMARY_TOKENS) {
+    if (t.type === asset) chains.add(t.chainId);
+  }
+  return (RETENIX_CHAIN_IDS as readonly number[]).filter((id) => chains.has(id));
+}
+
+/** The primary-token record for (asset, chainId), or null when that asset
+ *  does not exist there — callers must treat null as "invalid pair". */
+export function primaryTokenFor(
+  asset: SUPPORTED_TOKEN_TYPE,
+  chainId: number,
+): (typeof SUPPORTED_PRIMARY_TOKENS)[number] | null {
+  return (
+    SUPPORTED_PRIMARY_TOKENS.find((t) => t.type === asset && t.chainId === chainId) ??
+    null
+  );
+}

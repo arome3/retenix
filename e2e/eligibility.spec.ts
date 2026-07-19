@@ -32,6 +32,9 @@ const BANNED = [
   /\bslippage\b/i,
   /\bsmart[\s-]contracts?\b/i,
   /\bdelegat(?:e|es|ed|ing|ion|ions)\b/i,
+  // doc 20 G12: the fallback offers "tokenized gold", never "RWA".
+  /\brwa\b/i,
+  /\breal[\s-]world\s+assets?\b/i,
 ];
 
 // Verbatim correct-answer substrings (doc 04). Clicking the option text forwards
@@ -40,6 +43,11 @@ const CORRECT = [
   "token that tracks the price",
   "like any investment, and it also depends on the issuer",
   "Around the clock",
+  // Q4 (doc 18 F11) — the daily-reset decay question that unlocks leveraged
+  // assets. Deliberately worded without "leverage" (G12 reserves that word
+  // for the F12 compliance surface), so the banned-vocab walk below stays
+  // clean through this screen too.
+  "it resets daily",
 ];
 
 test.afterAll(closeDb);
@@ -57,6 +65,8 @@ async function answerQuiz(page: Page): Promise<void> {
   await page.getByText(CORRECT[1]).click();
   await expect(page).toHaveURL(/\/eligibility\/quiz\/3$/);
   await page.getByText(CORRECT[2]).click();
+  await expect(page).toHaveURL(/\/eligibility\/quiz\/4$/);
+  await page.getByText(CORRECT[3]).click();
   await expect(page).toHaveURL(/\/eligibility\/identity$/);
 }
 
@@ -202,7 +212,10 @@ test.describe("PS-F1.3 · restricted region — a hard block that is not a wall"
         name: "Tokenized stocks aren't available in your region",
       }),
     ).toBeVisible();
-    await expect(page.getByText("crypto basket — SOL and ETH")).toBeVisible();
+    // doc 20: the US fallback now offers crypto + gold (not crypto-only).
+    await expect(
+      page.getByText("crypto basket — SOL and ETH — plus tokenized gold"),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Continue" }).click();
     await answerQuiz(page);
@@ -288,6 +301,8 @@ test.describe("compliance surfaces", () => {
       await page.getByText(CORRECT[1]).click();
       await assertClean("quiz/3");
       await page.getByText(CORRECT[2]).click();
+      await assertClean("quiz/4");
+      await page.getByText(CORRECT[3]).click();
       await assertClean("identity");
       await fillIdentity(page);
       await assertClean("risk");

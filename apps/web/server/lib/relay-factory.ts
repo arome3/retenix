@@ -40,6 +40,24 @@ export interface PlanRelay {
   }): Promise<{ txHash: string }>;
   /** Module 13: lazy confirmation read for the revoked flag. */
   txStatus(txHash: string): Promise<"pending" | "confirmed" | "failed">;
+  /** Module 14: relay enrollEstate (owner-signed, local verify before gas). */
+  enrollEstate(args: {
+    owner: string;
+    beneficiaryHash: string;
+    inactivitySecs: bigint;
+    nonce: bigint;
+    ownerSig: string;
+  }): Promise<{ txHash: string }>;
+  /** Module 14: relay checkIn — caller verifies provenance first (CONFLICTS #13). */
+  checkIn(owner: string): Promise<{ txHash: string }>;
+  /** Module 14: Estate struct + effective status (Claimable is a read state). */
+  estateOf(owner: string): Promise<{
+    beneficiaryHash: string;
+    inactivitySecs: bigint;
+    lastCheckIn: bigint;
+    claimReadyAt: bigint;
+    status: number;
+  }>;
 }
 
 /** Default: the real chain client. Overridden in tests via setPlanRelayFactory. */

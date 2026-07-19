@@ -8,9 +8,15 @@
 //   POST /internal/demo/rogue  {planId}  — DEMO_MODE=1 only; the endpoint
 //                                          does not exist otherwise (404
 //                                          before auth, leaking nothing)
+//   POST /webhooks/alchemy               — module 14: Alchemy Address
+//                                          Activity. Authenticated by the
+//                                          HMAC signature over the RAW body
+//                                          (X-Alchemy-Signature), NOT the
+//                                          bearer token — Alchemy can't send
+//                                          one. UX notifications only.
 //   GET  /healthz                        — liveness (Railway healthcheck)
 //
-// Plain node:http — two routes don't justify a framework dependency.
+// Plain node:http — this few routes don't justify a framework dependency.
 
 import { timingSafeEqual } from "node:crypto";
 import {
@@ -23,9 +29,12 @@ import {
 import { env } from "../env";
 import { captureError } from "./notify";
 import { enqueuePlanNow, enqueueRogue, type SchedulerCtx } from "./scheduler";
+import { handleAddressActivity, verifyAlchemySignature, type WebhookDeps } from "./webhooks";
 
 export interface HttpCtx extends SchedulerCtx {
   demoMode: boolean;
+  /** Module 14: the Alchemy receiver's deps (absent in bare test contexts). */
+  estateWebhook?: WebhookDeps;
 }
 
 const UUID_RE =
@@ -35,6 +44,25 @@ function authorized(req: IncomingMessage): boolean {
   const header = Buffer.from(req.headers.authorization ?? "");
   const expected = Buffer.from(`Bearer ${env.INTERNAL_API_TOKEN}`);
   return header.length === expected.length && timingSafeEqual(header, expected);
+}
+
+/** Raw body read — the Alchemy HMAC signs the exact bytes. */
+function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error("body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
 }
 
 function readJson(req: IncomingMessage, limit = 4_096): Promise<unknown> {
@@ -79,6 +107,24 @@ async function route(
     return json(res, 200, { ok: true });
   }
   if (req.method !== "POST") return json(res, 404, { error: "not found" });
+
+  // Alchemy webhook — HMAC over the RAW body is the auth (see header).
+  if (req.url === "/webhooks/alchemy") {
+    if (!ctx.estateWebhook) return json(res, 404, { error: "not found" });
+    const raw = await readRaw(req, 1_048_576);
+    const signature = req.headers["x-alchemy-signature"];
+    if (!verifyAlchemySignature(raw, typeof signature === "string" ? signature : undefined)) {
+      return json(res, 401, { error: "bad signature" });
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(raw.toString("utf8"));
+    } catch {
+      return json(res, 400, { error: "invalid json" });
+    }
+    const result = await handleAddressActivity(ctx.estateWebhook, body);
+    return json(res, 200, result);
+  }
 
   const isExecuteNow = req.url === "/internal/execute-now";
   const isRogue = req.url === "/internal/demo/rogue";

@@ -27,6 +27,17 @@ const schema = z.object({
   CLAIM_DELEGATE_ADDRESS_BSC: z.string().min(1),
   CLAIM_DELEGATE_ADDRESS_XLAYER: z.string().min(1),
   ALCHEMY_WEBHOOK_SIGNING_KEY: z.string().min(1),
+  // Module 14: the keeper builds heir claim links against the web origin
+  // (doc 00 lists APP_BASE_URL web-side; the worker addition is doc 14's).
+  APP_BASE_URL: z.url(),
+  // Module 14 (PROPOSED — provider of choice, recorded for doc 17): Resend.
+  // Absent → the keeper logs the claim link loudly instead of emailing
+  // (console + Slack + events row) so the demo proceeds without a provider.
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(1).optional(),
+  // Module 14 dev-only escrow fallback (no AWS locally); forbidden in prod —
+  // the escrow provider resolution throws if it would ever be used there.
+  ESCROW_DEV_SECRET: z.string().min(8).optional(),
   SLACK_STATUS_WEBHOOK_URL: z.url(),
   SENTRY_DSN: z.string().min(1),
   INTERNAL_API_TOKEN: z.string().min(1),

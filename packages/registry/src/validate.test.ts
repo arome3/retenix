@@ -75,3 +75,59 @@ describe("validateRegistry (fake-mint guard, G11)", () => {
     expect(XS_PREFIX).toBe("Xs");
   });
 });
+
+// A valid pinned gold row to mutate into each rwa-gold failure case (doc 20).
+const goodGold: RegistryAsset = {
+  id: "paxg",
+  ticker: "PAXG",
+  name: "Gold (tokenized)",
+  kind: "rwa-gold",
+  chainId: 1,
+  address: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+  eligibleRegions: "NON_SANCTIONED",
+  disclosure:
+    "PAXG tracks physical gold held by Paxos. It is a token claim, not vault access. Issuer: Paxos.",
+  issuer: "Paxos",
+  decimals: 18,
+};
+
+describe("validateRegistry — rwa-gold invariants (doc 20; no Xs tripwire exists)", () => {
+  it("accepts a well-formed gold row", () => {
+    expect(() => validateRegistry([goodGold])).not.toThrow();
+  });
+
+  it("rejects gold not on Ethereum (chain 1)", () => {
+    expect(() => validateRegistry([{ ...goodGold, chainId: 101 }])).toThrow(
+      /Ethereum ERC-20/,
+    );
+  });
+
+  it("rejects a gold address that is not a 0x ERC-20 contract", () => {
+    expect(() =>
+      validateRegistry([
+        { ...goodGold, address: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W" },
+      ]),
+    ).toThrow(/0x ERC-20 contract/);
+  });
+
+  it("rejects gold with a missing disclosure", () => {
+    expect(() =>
+      validateRegistry([{ ...goodGold, disclosure: undefined }]),
+    ).toThrow(/requires a disclosure/);
+  });
+
+  it("rejects gold not marked NON_SANCTIONED", () => {
+    expect(() =>
+      validateRegistry([{ ...goodGold, eligibleRegions: "ALL" }]),
+    ).toThrow(/NON_SANCTIONED/);
+  });
+
+  it("rejects gold with no issuer or non-positive decimals", () => {
+    expect(() => validateRegistry([{ ...goodGold, issuer: undefined }])).toThrow(
+      /requires a named issuer/,
+    );
+    expect(() =>
+      validateRegistry([{ ...goodGold, decimals: undefined }]),
+    ).toThrow(/positive decimals/);
+  });
+});

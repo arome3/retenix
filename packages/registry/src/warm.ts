@@ -10,13 +10,14 @@
 // lives only in packages/ua (check-pins enforces it). The arg shape { chainId,
 // address } is the SDK's IBasicToken (confirmed in the 2.0.3 d.ts).
 import { warmUpToken, type UniversalAccount } from "@retenix/ua";
-import { eligibleAssets } from "./eligible";
+import { eligibleAssets, type AssetAccess } from "./eligible";
 
 export async function warmRegistry(
   ua: UniversalAccount,
   region: string,
+  access: AssetAccess = {},
 ): Promise<void> {
-  const assets = eligibleAssets(region);
+  const assets = eligibleAssets(region, access);
   const results = await Promise.allSettled(
     assets.map((a) =>
       warmUpToken(ua, { chainId: a.chainId, address: a.address }),

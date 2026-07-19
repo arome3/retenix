@@ -12,6 +12,7 @@ import {
   POLICY_ADDRESSES,
   RETENIX_POLICY_ABI,
   createPlanDigest,
+  enrollEstateDigest,
   revokeAllDigest,
   revokePlanDigest,
 } from "@retenix/shared";
@@ -229,6 +230,71 @@ export class RelayClient {
     const receipt = await this.provider.getTransactionReceipt(txHash);
     if (receipt === null) return "pending";
     return receipt.status === 1 ? "confirmed" : "failed";
+  }
+
+  // --- estates (module 14) ---
+
+  /** Relay enrollEstate — same local-verify-before-gas posture as createPlan.
+   *  The digest comes from @retenix/shared enrollEstateDigest, never re-encoded. */
+  async enrollEstate(args: {
+    owner: string;
+    beneficiaryHash: string;
+    inactivitySecs: bigint;
+    nonce: bigint;
+    ownerSig: string;
+  }): Promise<RelayResult> {
+    const digest = enrollEstateDigest(this.domain, {
+      beneficiaryHash: args.beneficiaryHash,
+      inactivitySecs: args.inactivitySecs,
+      nonce: args.nonce,
+    });
+    this.assertSigner(digest, args.ownerSig, args.owner, "enrollEstate");
+    const tx = await this.writeContract().enrollEstate(
+      args.owner,
+      args.beneficiaryHash,
+      args.inactivitySecs,
+      args.nonce,
+      args.ownerSig,
+    );
+    const receipt = (await tx.wait()) as TransactionReceipt;
+    return { txHash: receipt.hash, receipt };
+  }
+
+  /**
+   * Relay checkIn (onlyRelayer onchain — CONFLICTS #13: the caller MUST have
+   * verified provenance first; for "I'm here" that's the signedProcedure
+   * envelope, whose proof the router stores in the events row). One call both
+   * bumps lastCheckIn and, mid-countdown, returns the estate to Enrolled (the
+   * contract's veto-by-liveness) — the anti-hijack moment is this single tx.
+   */
+  async checkIn(owner: string): Promise<RelayResult> {
+    const tx = await this.writeContract().checkIn(owner);
+    const receipt = (await tx.wait()) as TransactionReceipt;
+    return { txHash: receipt.hash, receipt };
+  }
+
+  /** Raw Estate struct + effective status (Countdown reads Claimable past
+   *  claimReadyAt — the estateStatus view is the truth, not the stored enum). */
+  async estateOf(owner: string): Promise<{
+    beneficiaryHash: string;
+    inactivitySecs: bigint;
+    lastCheckIn: bigint;
+    claimReadyAt: bigint;
+    status: number;
+  }> {
+    const [e, status] = await Promise.all([
+      this.reader.estates(owner) as Promise<
+        [string, string, bigint, bigint, bigint, bigint]
+      >,
+      this.reader.estateStatus(owner) as Promise<bigint>,
+    ]);
+    return {
+      beneficiaryHash: e[1],
+      inactivitySecs: e[2],
+      lastCheckIn: e[3],
+      claimReadyAt: e[4],
+      status: Number(status),
+    };
   }
 
   private assertSigner(

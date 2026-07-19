@@ -141,10 +141,27 @@ describe("exclusion rules (silent — not dust at all)", () => {
     expect(res.skipped.filter((s) => s.token)).toEqual([]);
   });
 
-  it("buildExclusionSet composes primaries + registry", () => {
+  it("excludes a tokenized-gold (rwa-gold) balance on Ethereum — a holding, not dust (doc 20)", async () => {
+    const paxg = REGISTRY.find((a) => a.id === "paxg")!;
+    expect(paxg.chainId).toBe(1);
+    const res = await scan({
+      evmBalances: { 1: [[paxg.address, "0x2386f26fc10000"]] }, // 0.01 PAXG
+      metadata: {
+        [paxg.address.toLowerCase()]: { symbol: "PAXG", decimals: 18 },
+      },
+      prices: { [paxg.address.toLowerCase()]: 4000 },
+    });
+    // Gold is a portfolio position; the sweep must never scoop it up.
+    expect(res.items).toEqual([]);
+    expect(res.skipped.filter((s) => s.token)).toEqual([]);
+  });
+
+  it("buildExclusionSet composes primaries + registry (incl. chain-1 gold)", () => {
     const set = buildExclusionSet();
     const spyx = REGISTRY.find((a) => a.id === "spyx")!;
+    const paxg = REGISTRY.find((a) => a.id === "paxg")!;
     expect(set.has(`101:${spyx.address.toLowerCase()}`)).toBe(true);
+    expect(set.has(`1:${paxg.address.toLowerCase()}`)).toBe(true);
     for (const t of SUPPORTED_PRIMARY_TOKENS) {
       expect(set.has(`${t.chainId}:${t.address.toLowerCase()}`)).toBe(true);
     }

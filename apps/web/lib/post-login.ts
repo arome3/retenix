@@ -50,4 +50,9 @@ export function onSessionEstablished(eoa: string, region: string): void {
   const ua = createUniversalAccount(eoa);
   void bootstrapUniversalAccount(ua).catch(() => {});
   void warmRegistryTokens(ua, region).catch(() => {});
+  // doc 14: silent escrow-tuple refresh on every login — the owner's own
+  // activity voids the escrowed set (self-invalidation IS the design), so a
+  // fresh session restores inheritance coverage headlessly. Exits after one
+  // cheap query when the user isn't enrolled.
+  void import("@/lib/escrow").then((m) => m.refreshEscrowCoverage()).catch(() => {});
 }

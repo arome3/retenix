@@ -38,8 +38,13 @@ export const fmtDelta = (usdV: number, pctV: number) =>
   `${usdV >= 0 ? "▲ +" : "▼ −"}${fmtUsd(Math.abs(usdV)).replace("$", "$")} (${usdV >= 0 ? "+" : "−"}${fmtPct(Math.abs(pctV))})`;
 
 /** Addresses: first 6 / last 4, `0x1234…abcd`. Geist Mono, copy-full
- *  affordance; receipts & settings only — never decision surfaces. */
-export const truncAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+ *  affordance; receipts & settings only — never decision surfaces. Strings
+ *  the ellipsis wouldn't shorten (≤ 11 chars) pass through whole — slicing
+ *  them would duplicate characters, not truncate (doc 15 edge-case pin).
+ *  Non-hex data (Solana base58) truncates the same way: it is data, and
+ *  first-6/last-4 is the one rule (DS-9.3). */
+export const truncAddr = (a: string) =>
+  a.length <= 11 ? a : `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 const timeFmt = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
@@ -83,4 +88,20 @@ export function splitUsd(v: number): { main: string; cents: string | null } {
   const s = usd.format(v);
   const dot = s.lastIndexOf(".");
   return { main: s.slice(0, dot), cents: s.slice(dot + 1) };
+}
+
+/** C8 countdown remaining time — "4d 12h" / "2h 05m" / "1m 30s" / "42s".
+ *  Digits change every second at demo scale, so the caller renders it through
+ *  <Num> (.tnum — G13). Clamped at zero (an elapsed countdown never renders
+ *  negative time). */
+export function formatCountdown(msRemaining: number): string {
+  const s = Math.max(0, Math.floor(msRemaining / 1000));
+  const d = Math.floor(s / 86_400);
+  const h = Math.floor((s % 86_400) / 3_600);
+  const m = Math.floor((s % 3_600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m ${String(sec).padStart(2, "0")}s`;
+  return `${sec}s`;
 }

@@ -37,6 +37,29 @@ const serverSchema = z.object({
   RPC_URL_BSC: z.url(),
   RPC_URL_XLAYER: z.url(),
   RPC_URL_SOLANA: z.url(),
+  // Module 14 (doc 00 canonical names): the estate escrow key + the deployed
+  // RetenixClaim delegates the tuple ceremony points at. The web server
+  // ENCRYPTS at estate.enroll (decrypt lives worker-side only); placeholder
+  // values keep boot green — the KMS/dev fence lands at first use
+  // (server/lib/estate.ts, module 08's degraded-boot convention).
+  KMS_ESCROW_KEY_ID: z.string().min(1),
+  AWS_REGION: z.string().min(1),
+  CLAIM_DELEGATE_ADDRESS_ETHEREUM: z.string().min(1),
+  CLAIM_DELEGATE_ADDRESS_BASE: z.string().min(1),
+  CLAIM_DELEGATE_ADDRESS_ARBITRUM: z.string().min(1),
+  CLAIM_DELEGATE_ADDRESS_BSC: z.string().min(1),
+  CLAIM_DELEGATE_ADDRESS_XLAYER: z.string().min(1),
+  // Dev-only escrow fallback secret (no AWS in local dev). Forbidden in
+  // production — server/lib/estate.ts throws if it would ever be used there.
+  ESCROW_DEV_SECRET: z.string().min(8).optional(),
+  // Doc 00 lists this worker-side; enrollment (web) substitutes it into
+  // inactivitySecs when DEMO_MODE=1 (TS-9.5 — at enrollment time only).
+  DEMO_INACTIVITY_SECS: z.coerce.number().int().positive().default(120),
+  // Module 15 invite emails (doc 15 unregistered-email path) — the module-14
+  // Resend posture verbatim: both OPTIONAL, absent → the invite is logged
+  // loudly and the flow proceeds (the demo never depends on a provider).
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(1).optional(),
 });
 
 const clientSchema = z.object({
@@ -100,3 +123,7 @@ export const devAffordances: boolean =
   typeof window === "undefined" &&
   process.env.NODE_ENV !== "production" &&
   env.DEMO_MODE === "1";
+
+// Module 14's escrow dev-fence (and any future "never in prod" guard) reads
+// this instead of process.env — NODE_ENV stays confined to this sanctioned file.
+export const isProductionRuntime: boolean = process.env.NODE_ENV === "production";

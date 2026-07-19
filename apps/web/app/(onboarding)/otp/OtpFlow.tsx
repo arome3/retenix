@@ -31,8 +31,8 @@ type Status =
   | "unavailable";
 
 type Notice = "invalid" | null;
-type Session = { eoa: string; region: string };
-type OtpHandle = {
+export type Session = { eoa: string; region: string };
+export type OtpHandle = {
   emit(event: "cancel"): unknown;
   emit(event: "verify-email-otp", otp: string): unknown;
 };
@@ -62,7 +62,7 @@ const noSubscribe = () => () => {};
 const readEmail = () => readOnboarding().email;
 const noEmailOnServer = () => null;
 
-type LoginHooks = {
+export type LoginHooks = {
   email: string;
   /** True on the fallback path: Magic's hosted window collects the code. */
   magicUI: boolean;
@@ -84,9 +84,10 @@ type LoginHooks = {
 /*
  * Doc 02's login sequence, custom-UI variant. Module scope on purpose: this
  * drives an external system (Magic, then our server), and the component only
- * listens.
+ * listens. Exported for doc 14's S6 heir onboarding — "doc 02's exact flow",
+ * reused rather than re-derived.
  */
-async function runLogin(hooks: LoginHooks): Promise<void> {
+export async function runLogin(hooks: LoginHooks): Promise<void> {
   let closedByUser = false;
   let sent = false;
   let terminal = false;

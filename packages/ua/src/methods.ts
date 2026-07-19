@@ -111,9 +111,8 @@ export function warmUpToken(
 
 // --- 7702 delegation status (doc 15 security page) ---
 // OQ5: getEIP7702Deployments / getEIP7702Auth are typed `Promise<any>` in the 2.0.3
-// d.ts. NOT yet introspected on mainnet (needs a funded smoke wallet — HANDOFF), so
-// narrowed to `unknown` to force callers to validate rather than trust an `any`. The
-// concrete shapes are frozen here once mainnet confirms them — never invented.
+// d.ts. The passthroughs stay `unknown` so callers must validate rather than trust
+// an `any`; the PROVISIONAL interfaces + parsers below are the doc-15 freeze.
 export function getEIP7702Deployments(ua: UniversalAccount): Promise<unknown> {
   return ua.getEIP7702Deployments();
 }
@@ -124,4 +123,62 @@ export function getEIP7702Auth(
   chainIds: number[],
 ): Promise<unknown> {
   return ua.getEIP7702Auth(chainIds);
+}
+
+// --- OQ5 freeze (PROVISIONAL — doc 15) -------------------------------------
+//
+// Shape source: Particle's own demo (github.com/Particle-Network/ua-dynamic-7702,
+// hooks/universal-account-provider.tsx) consumes getEIP7702Deployments() as an
+// ARRAY of per-chain records — `deployments.find((d) => d.chainId === …)?.isDelegated`
+// — and getEIP7702Auth() entries as `{ address, nonce }`. Not yet corroborated by a
+// live mainnet capture (placeholder creds — HANDOFF owner-action:
+// `pnpm --filter worker verify:send` logs the raw payload; reconcile here if it
+// differs). Parsers return null on ANY mismatch so a wrong guess can only ever
+// produce the security page's honest "couldn't check just now" state — never a
+// fabricated checkmark (doc 15 Security & failure modes).
+
+/** Per-chain 7702 delegation status as Particle's index reports it. */
+export interface EIP7702Deployment {
+  chainId: number;
+  isDelegated: boolean;
+}
+
+/** One authorization target from getEIP7702Auth: the delegate contract Particle
+ *  wants installed (the Universal Account implementation) + the signing nonce. */
+export interface EIP7702AuthTarget {
+  chainId?: number;
+  address: string;
+  nonce: number;
+}
+
+/** Validate a raw getEIP7702Deployments() payload. Null = shape mismatch. */
+export function parseEIP7702Deployments(raw: unknown): EIP7702Deployment[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: EIP7702Deployment[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) return null;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.chainId !== "number" || typeof rec.isDelegated !== "boolean") {
+      return null;
+    }
+    out.push({ chainId: rec.chainId, isDelegated: rec.isDelegated });
+  }
+  return out;
+}
+
+/** Validate a raw getEIP7702Auth() payload. Null = shape mismatch. */
+export function parseEIP7702AuthTargets(raw: unknown): EIP7702AuthTarget[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: EIP7702AuthTarget[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) return null;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.address !== "string" || typeof rec.nonce !== "number") return null;
+    out.push({
+      ...(typeof rec.chainId === "number" ? { chainId: rec.chainId } : {}),
+      address: rec.address,
+      nonce: rec.nonce,
+    });
+  }
+  return out;
 }

@@ -190,9 +190,15 @@ async function main(): Promise<void> {
     rows.push(`${pass ? "PASS" : "FAIL"}  ${u.id.padEnd(28)} ${note}`);
   }
 
+  // AC1 threshold is a PERCENTAGE (≥95%), not a fixed count — so adding gold
+  // utterances (doc 20) keeps the bar honest as the set grows.
+  const threshold = Math.ceil(utterances.length * 0.95);
+
   console.log(`\nintent eval — ${live ? "LIVE model" : "recorded fixtures"} (region ${region})\n`);
   for (const r of rows) console.log(`  ${r}`);
-  console.log(`\n  score: ${passed}/${utterances.length} (AC1 needs >= 24)\n`);
+  console.log(
+    `\n  score: ${passed}/${utterances.length} (AC1 needs >= ${threshold}, i.e. ≥95%)\n`,
+  );
 
   if (record) {
     const unavailable = Object.entries(recorded)
@@ -219,7 +225,7 @@ async function main(): Promise<void> {
     console.log("  fixtures.json recorded.\n");
   }
 
-  process.exit(passed >= 24 ? 0 : 1);
+  process.exit(passed >= threshold ? 0 : 1);
 }
 
 void main();

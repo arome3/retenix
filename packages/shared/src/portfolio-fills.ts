@@ -8,6 +8,7 @@ import { computeLegs } from "./basket";
 import {
   acceptableAddresses,
   extractFillQty,
+  isChainScanned,
   parseSeqFromPeriodKey,
   QTY_EPSILON,
   type Fill,
@@ -17,6 +18,16 @@ import {
 /** Sell fills come from these events (kill.leg = doc 13's forward contract,
  *  sell.receipt = doc 12's sell-from-detail). */
 export const SELL_FILL_EVENT_TYPES = ["kill.leg", "sell.receipt"] as const;
+
+/** Withdraw fills (doc 15): a withdraw of a LEDGER-TRACKED asset (sol/eth —
+ *  module 12 tracks their qty by execution ledger, not chain scan) must
+ *  reduce the ledger or the portfolio shows phantom quantity. Withdraw
+ *  send.receipt payloads carry an explicit `ledgerFill`; rows without one
+ *  (every plain USDC send, every stable/bnb withdraw) are SKIPPED — never
+ *  `unattributed`, so a send can never poison bases the way a mystery sell
+ *  would (deliberately more lenient than sellFillFromEvent: absence here
+ *  provably moved no ledger-tracked asset). */
+export const WITHDRAW_FILL_EVENT_TYPES = ["send.receipt"] as const;
 
 /** Classic SPL Token + Token-2022 — xStocks live under Token-2022, older SPL
  *  assets under classic; every Solana owner scan queries both (the dust
@@ -172,6 +183,35 @@ export function sellFillFromEvent(row: {
   };
 }
 
+/**
+ * A send.receipt event → sell-side fill, but ONLY via an explicit
+ * `ledgerFill` payload (written by doc 15's withdraw report for sol/eth).
+ * No ledgerFill → skipped, by design (see WITHDRAW_FILL_EVENT_TYPES).
+ */
+export function withdrawFillFromEvent(row: {
+  payloadJson: unknown;
+  atIso: string;
+}): FillMapping {
+  const payload = (row.payloadJson ?? {}) as {
+    ledgerFill?: { assetId?: unknown; qty?: unknown; usd?: unknown };
+  };
+  const lf = payload.ledgerFill;
+  if (!lf || typeof lf.assetId !== "string") return { skipped: true };
+  return {
+    fill: {
+      side: "sell",
+      assetId: lf.assetId,
+      usd:
+        typeof lf.usd === "number" && Number.isFinite(lf.usd) ? lf.usd : null,
+      qty:
+        typeof lf.qty === "number" && Number.isFinite(lf.qty) && lf.qty > 0
+          ? lf.qty
+          : null,
+      at: row.atIso,
+    },
+  };
+}
+
 /** Fold a list of mappings into fills + the unattributed count. */
 export function collectFills(mappings: readonly FillMapping[]): {
   fills: Fill[];
@@ -217,7 +257,10 @@ export function accumulateTokenAccounts(
 ): void {
   const byMint = new Map<string, string>();
   for (const asset of assets) {
-    if (asset.kind === "equity" && asset.chainId === 101) {
+    // isChainScanned, not a local `kind === "equity"` test: holdings.ts's
+    // ledgerTrackedPositions is the exact COMPLEMENT of this loop, and the two
+    // must move together or an asset is enumerated twice or not at all.
+    if (isChainScanned(asset)) {
       byMint.set(asset.address, asset.id);
     }
   }
