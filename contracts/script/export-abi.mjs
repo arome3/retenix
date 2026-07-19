@@ -1,5 +1,5 @@
 // Regenerates the shared ABI modules from the forge build artifacts. Run
-// after any RetenixPolicy/RetenixClaim surface change:
+// after any RetenixPolicy/RetenixClaim/RetenixHedge surface change:
 //   cd contracts && forge build && node script/export-abi.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -24,3 +24,4 @@ export const ${constName} = ${body} as const;
 
 exportAbi("RetenixPolicy", "RETENIX_POLICY_ABI", "retenix-policy.abi.ts");
 exportAbi("RetenixClaim", "RETENIX_CLAIM_ABI", "retenix-claim.abi.ts");
+exportAbi("RetenixHedge", "RETENIX_HEDGE_ABI", "retenix-hedge.abi.ts");
