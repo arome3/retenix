@@ -69,12 +69,14 @@ jobs:
       # doc 01 / doc 17: axe over the four shell routes. Doc 17 §CI/CD lists axe
       # under ci.yml, but it is a Playwright spec needing a browser, a booted
       # dev server, and Postgres — reproducing that in ci.yml would duplicate
-      # this entire job for six assertions. Non-blocking on its first outings:
-      # it has never run in CI, and its networkidle waits plus a computed-style
-      # focus-ring assertion are exactly what behaves differently on a cold
-      # Turbopack compile. Flip to blocking after one clean run.
+      # this entire job for six assertions.
+      #
+      # BLOCKING as of its first CI run (6/6 in 28s, PR #3). It landed
+      # continue-on-error only because it had never executed in CI and its
+      # networkidle waits plus a computed-style focus-ring assertion were the
+      # kind of thing that behaves differently on a cold Turbopack compile.
+      # It didn't, so accessibility is a real gate now rather than a report.
       - name: axe (WCAG 2.2 AA)
-        continue-on-error: true
         run: pnpm exec playwright test --config e2e/playwright.config.ts e2e/a11y-shell.spec.ts
 
       - uses: actions/upload-artifact@v4
