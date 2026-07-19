@@ -60,6 +60,29 @@ const schema = z.object({
   // mirror of the web's NEXT_PUBLIC_PORTFOLIO_LIVE marks half (separate
   // process env; set the two together so the statement and its history agree).
   PORTFOLIO_MARKS: z.enum(["jupiter", "last-trade"]).default("jupiter"),
+
+  // --- module 17 (doc 17) ---------------------------------------------------
+  // Sentry release = git SHA (doc 17 §Observability). Railway injects the first
+  // automatically; SENTRY_RELEASE lets a manual deploy name its own. Absent
+  // locally, where events simply are not release-tagged.
+  RAILWAY_GIT_COMMIT_SHA: z.string().min(7).optional(),
+  SENTRY_RELEASE: z.string().min(1).optional(),
+  // Deny-by-default for /internal/* arriving through a PUBLIC edge (TS-13.2).
+  // Railway's edge sets x-forwarded-for; a private-network caller does not.
+  // PROPOSED (spec-silent) — the spec asks for private networking, which cannot
+  // reach across clouds (see HANDOFF); this is the enforceable half.
+  // prod = "1". staging = "0", because e2e drives /internal/demo/rogue over the
+  // public domain. Default off so no existing environment changes behaviour.
+  INTERNAL_ROUTES_PRIVATE_ONLY: z.enum(["0", "1"]).default("0"),
+  // Chainlink upkeep LINK-balance alert (doc 14 requires the alert and gives no
+  // number; contracts/script/RegisterUpkeep.md specifies a >=5 LINK starting
+  // deposit on One, so 2 is 40% of it). PROPOSED — resize once OQ6 confirms the
+  // Arbitrum premium at registration.
+  LINK_BALANCE_WARN: z.coerce.number().positive().default(2),
+  // The LINK token + registry to read that balance from. Absent → the check is
+  // skipped and says so, rather than paging on an unconfigured upkeep.
+  LINK_TOKEN_ADDRESS: z.string().min(1).optional(),
+  CHAINLINK_UPKEEP_ADMIN: z.string().min(1).optional(),
 });
 
 const parsed = schema.safeParse(process.env);
