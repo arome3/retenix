@@ -40,6 +40,17 @@ describe("proxy — no session", () => {
       expect(go(path, "none")).toBeNull();
     }
   });
+
+  // doc 17: next.config.ts sets tunnelRoute "/monitoring", which Next compiles
+  // to a REWRITE — and rewrites run after this proxy. Gated, every browser
+  // error from a logged-out session would be redirected to /welcome instead of
+  // reaching Sentry, silently discarding the onboarding and OTP failures that
+  // matter most. Asserted for the no-session case specifically, because that is
+  // the one that breaks.
+  it("never gates the Sentry tunnel — logged-out errors are the ones worth having", () => {
+    expect(go("/monitoring", "none")).toBeNull();
+    expect(go("/monitoring/", "none")).toBeNull();
+  });
 });
 
 describe("proxy — session without a region (PS-F1-AC4, doc 02 half)", () => {

@@ -30,7 +30,7 @@ import type { Db } from "@retenix/db";
 import { sha256, toUtf8Bytes, type Signer } from "ethers";
 
 import { env } from "../env";
-import { captureError, recordEvent, slack } from "./notify";
+import { captureError, keeperDeadlineFired, recordEvent, slack } from "./notify";
 import { claimOnChain, makeClaimChainIo, type ClaimChainIo } from "./estate-claim";
 import { scanEstate, defaultScanDeps, type ChainScan, type EstateScanDeps } from "./estate-scan";
 import {
@@ -104,6 +104,10 @@ async function keeperStep(deps: KeeperDeps, estate: EnrolledEstate): Promise<voi
     try {
       const { txHash } = await deps.onchain.fireDeadline(estate.owner);
       console.log(`[keeper] fireDeadline(${estate.owner}) → ${txHash}`);
+      // doc 17 trigger 4a. A console.log is invisible in production, and this
+      // is the moment the challenge window opens — ops must know before the
+      // heir does, while the owner can still cancel.
+      await keeperDeadlineFired(estate.owner, txHash);
     } catch (err) {
       // Chainlink (or anyone) may have fired it first — re-read next tick
       captureError(err, { while: "keeper-fire-deadline", owner: estate.owner });

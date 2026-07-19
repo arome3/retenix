@@ -1,0 +1,49 @@
+# Dependency bots (doc 17 §Gotchas — G1).
+#
+# "renovate/dependabot must be configured to IGNORE the two exact pins — a
+# helpful bot bump is a real threat to demo week."
+#
+# ENFORCEMENT vs COURTESY: scripts/check-pins.mjs (ci.yml's `pins` job) is the
+# enforcement — it fails CI on any drift. This file is the courtesy that stops
+# the PR being opened at all, so nobody has to review-and-close it at 1am.
+#
+# The ignore list is not ad-hoc: it is exactly the rows doc 00's canonical
+# version table marks EXACT. G1 mandates the first two; the other four carry the
+# same "no ^ or ~" policy for the same reason, and a bot cannot tell them apart.
+#
+# Chosen over renovate: native, no app install, no renovate.json preset
+# archaeology. For a solo hackathon repo that is the whole decision.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    # One root pnpm-lock.yaml covers apps/* and packages/*; `directories` lets
+    # the workspace members' manifests be seen without a config entry each.
+    directories:
+      - "/"
+      - "/apps/*"
+      - "/packages/*"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    ignore:
+      # G1 — the two load-bearing pins. The daily $1 mainnet smoke is the
+      # tripwire if either ever moves (CONFLICTS #20).
+      - dependency-name: "@particle-network/universal-account-sdk"
+      - dependency-name: "magic-sdk"
+      # Also EXACT per doc 00's table — resolved against installed typings
+      # (@magic-ext/evm's EVMNetworkConfig[] shape) and the Admin SDK's DID path.
+      - dependency-name: "@magic-ext/evm"
+      - dependency-name: "@magic-sdk/admin"
+      # Exact in apps/web: the 15->16 upgrade was a deliberate, swept migration
+      # (Turbopack default, flat eslint configs, proxy.ts rename). Not a bot's.
+      - dependency-name: "next"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+
+  # Actions get stale quietly and none of them can break the demo.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2

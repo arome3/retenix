@@ -6,6 +6,7 @@ import { Num } from "@/components/Num";
 import { fmtUsd } from "@/lib/format";
 import { retryKillLeg } from "@/lib/kill-runner";
 import { trpc } from "@/lib/trpc";
+import { useNamedSource } from "@/hooks/use-named-source";
 
 /*
  * C7's per-leg progress list + calm completion state (doc 13). Polls
@@ -59,6 +60,11 @@ export function KillProgress({ eoa, killId }: { eoa: string; killId: string }) {
     enabled: status.data?.done === true,
     retry: false,
   });
+
+  // PS-8.2: the per-leg progress rows name each network. `status.data?.`
+  // because `const s = status.data` is not in scope until after the early
+  // returns below, and a hook cannot live under them.
+  useNamedSource("kill", (status.data?.legs.length ?? 0) !== 0);
 
   if (status.isPending) {
     return (

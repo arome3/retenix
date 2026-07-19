@@ -76,7 +76,29 @@ export async function deleteTestUser(user: TestUser): Promise<void> {
     user.userId,
   ]);
   await db().query("delete from estates where user_id = $1", [user.userId]);
-  await db().query("delete from users where id = $1", [user.userId]);
+
+  // Retry the final delete (module 17). PS-8.2 telemetry is sent with
+  // `fetch(..., {keepalive: true})` precisely so a navigation cannot abort it —
+  // which means a ui.session_started or ui.network_named write can still be in
+  // flight while a spec is tearing down, and land BETWEEN the events delete
+  // above and this one. Re-clearing events and retrying closes it; the in-flight
+  // write settles in milliseconds.
+  //
+  // Only a teardown concern: production never deletes users, and if such a
+  // write ever did lose the race the FK simply rejects it and the client
+  // swallows the rejection, which is the correct outcome for telemetry.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await db().query("delete from users where id = $1", [user.userId]);
+      return;
+    } catch (err) {
+      const isFk =
+        typeof err === "object" && err !== null && (err as { code?: string }).code === "23503";
+      if (!isFk || attempt >= 3) throw err;
+      await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+      await db().query("delete from events where user_id = $1", [user.userId]);
+    }
+  }
 }
 
 /*

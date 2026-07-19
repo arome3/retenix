@@ -19,8 +19,17 @@ import { GATE_COOKIE, SESSION_COOKIE } from "@/lib/cookies";
 const ENTRY = /^\/(?:welcome|otp)(?:\/|$)/;
 /** The eligibility gate — doc 04 fills it in; S1 hosts it. */
 const GATE = /^\/eligibility(?:\/|$)/;
-/** Never gated: the API gates itself, and these are outside the authed shell. */
-const UNGATED = /^\/(?:api|dev|help|claim)(?:\/|$)/;
+/**
+ * Never gated: the API gates itself, and these are outside the authed shell.
+ *
+ * `monitoring` is doc 17's Sentry tunnel (next.config.ts `tunnelRoute`) — an
+ * ingest endpoint, not an app surface. It must stay ungated precisely because
+ * the errors worth having come from LOGGED-OUT sessions: a redirect to
+ * /welcome here would silently discard every onboarding and OTP failure, which
+ * is the most fragile stretch of the demo. Sentry's tunnel validates that the
+ * envelope's DSN matches ours, so it is not an open proxy.
+ */
+const UNGATED = /^\/(?:api|dev|help|claim|monitoring)(?:\/|$)/;
 
 const HOME = "/home";
 const WELCOME = "/welcome";

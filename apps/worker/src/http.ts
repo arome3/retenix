@@ -14,7 +14,14 @@
 //                                          (X-Alchemy-Signature), NOT the
 //                                          bearer token — Alchemy can't send
 //                                          one. UX notifications only.
-//   GET  /healthz                        — liveness (Railway healthcheck)
+//   GET  /healthz                        — liveness (Railway healthcheck).
+//                                          Unauthenticated and dependency-free
+//                                          BY DESIGN: Railway's probe cannot
+//                                          send a header, and a public endpoint
+//                                          must not publish queue depth.
+//   GET  /internal/health                — doc 17 readiness: queue depth, last
+//                                          cron tick, RPC reachability. Bearer
+//                                          token; 200 healthy / 503 degraded.
 //
 // Plain node:http — this few routes don't justify a framework dependency.
 
@@ -35,6 +42,37 @@ export interface HttpCtx extends SchedulerCtx {
   demoMode: boolean;
   /** Module 14: the Alchemy receiver's deps (absent in bare test contexts). */
   estateWebhook?: WebhookDeps;
+  /**
+   * Module 17: /internal/health's collector (absent in bare test contexts).
+   * Only `ok` is read here — it picks 200 vs 503; the body is serialised whole.
+   */
+  health?: { collect(): Promise<{ ok: boolean }> };
+}
+
+/**
+ * Deny-by-default for /internal/* arriving through a PUBLIC edge (TS-13.2).
+ *
+ * The spec asks for Railway private networking as the boundary, with
+ * INTERNAL_API_TOKEN as the second factor. Private networking is real, but it
+ * is scoped to a Railway environment — Vercel is a different cloud and cannot
+ * resolve *.railway.internal, so "web calls worker over the private hostname"
+ * is not achievable as written (recorded in HANDOFF). Meanwhile the worker
+ * needs public ingress at all, because Alchemy's Address Activity webhooks
+ * originate on the internet.
+ *
+ * This is the enforceable half: Railway's edge sets x-forwarded-for, and a
+ * caller on the private network does not. With INTERNAL_ROUTES_PRIVATE_ONLY=1
+ * (production), an /internal/* request that came through the public edge does
+ * not exist. 404, not 403 — the same posture as the rogue route, leaking
+ * nothing about what is behind it.
+ *
+ * Staging leaves it "0": e2e drives /internal/demo/rogue over the public domain.
+ */
+function viaPublicEdge(req: IncomingMessage): boolean {
+  return (
+    env.INTERNAL_ROUTES_PRIVATE_ONLY === "1" &&
+    req.headers["x-forwarded-for"] !== undefined
+  );
 }
 
 const UUID_RE =
@@ -106,6 +144,22 @@ async function route(
   if (req.method === "GET" && req.url === "/healthz") {
     return json(res, 200, { ok: true });
   }
+
+  // Every /internal/* route, GET or POST, sits behind the public-edge fence.
+  if (req.url?.startsWith("/internal/") && viaPublicEdge(req)) {
+    return json(res, 404, { error: "not found" });
+  }
+
+  // Must be answered before the POST-only guard below.
+  if (req.method === "GET" && req.url === "/internal/health") {
+    if (!authorized(req)) return json(res, 401, { error: "unauthorized" });
+    if (!ctx.health) {
+      return json(res, 503, { ok: false, degraded: ["health probes unavailable"] });
+    }
+    const body = await ctx.health.collect();
+    return json(res, body.ok ? 200 : 503, body);
+  }
+
   if (req.method !== "POST") return json(res, 404, { error: "not found" });
 
   // Alchemy webhook — HMAC over the RAW body is the auth (see header).

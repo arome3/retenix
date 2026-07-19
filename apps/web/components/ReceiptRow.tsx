@@ -20,7 +20,13 @@
 //   wrapper — the outer <li> is transform-positioned by the virtualizer, and
 //   a keyframe animating `transform` on it would teleport the row. Reduced
 //   motion opts into the 120ms opacity fade (data-rm-fade + data-state).
-import { compactSentence, type FeedItem, type LegDetail } from "@retenix/shared";
+import {
+  compactSentence,
+  namesAKnownSource,
+  type FeedItem,
+  type LegDetail,
+} from "@retenix/shared";
+import { useNamedSource } from "@/hooks/use-named-source";
 import { Shield } from "lucide-react";
 import {
   BrokerAvatar,
@@ -102,6 +108,12 @@ export function ReceiptRow({
 }: ReceiptRowProps) {
   const detailId = `receipt-detail-${item.id}`;
   const { relative, absolute } = receiptTimestamp(item.at, nowMs);
+  const shownSentence = compactSentence(item.sentence);
+  // PS-8.2: some sentences name a source WITHOUT the "funded from …" shape
+  // compactSentence elides — the estate check-in receipt does exactly that,
+  // in the compact row. An expansion-only hook would score those sessions
+  // clean, which is the flattering-metric failure PS-8.2 exists to prevent.
+  useNamedSource("receipt", namesAKnownSource(shownSentence));
 
   return (
     <div
@@ -120,7 +132,7 @@ export function ReceiptRow({
           >
             <Mark item={item} />
             <span className="min-w-0 flex-1 text-body font-normal text-foreground">
-              {compactSentence(item.sentence)}
+              {shownSentence}
             </span>
             <time
               dateTime={item.at}

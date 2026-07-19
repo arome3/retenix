@@ -1,0 +1,125 @@
+# e2e.yml — Playwright in CI (doc 17 §CI/CD).
+#
+# Module 16 owns the golden-path ASSERTIONS (e2e/golden-path.spec.ts) and the
+# seed it runs against (e2e/seed/demo.ts); it deliberately did not author this
+# file and left a job sketch in docs/notes/ci-e2e-recommendation.md. This is
+# that job, adapted.
+#
+# TWO MODES, matching the spec's own hybrid:
+#   golden-path — every PR + main. Local `next dev` + a Postgres service,
+#                 mock+seed, no credentials. ~26s. This is the blocking signal.
+#   staging     — main only, and only once STAGING_APP_BASE_URL exists as a repo
+#                 VARIABLE. Drives the real rogue endpoint (beat 5) and the
+#                 demo-timer estate (beat 6B) against a deployed environment.
+#
+# Env is sourced from the committed apps/web/.env.example rather than restated
+# here. The dev server's env.ts zod-validates ~30 vars at boot even though the
+# golden-path assertions are mock+seed, so CI must supply them — and sourcing
+# the example file means a var added to env.ts but not to the example turns this
+# red BY NAME, which is the DoD's ".env.example completeness" check for free.
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  golden-path:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: retenix_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: web env (placeholders from the committed example)
+        run: grep -E '^[A-Z_][A-Z0-9_]*=' apps/web/.env.example >> "$GITHUB_ENV"
+      # The service, not the example's value. DEMO_MODE stays "0" here: the CI
+      # golden path is deterministic mock+seed, and demo endpoints are
+      # staging-only (doc 16 §security).
+      - name: point env at the CI services
+        run: |
+          {
+            echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/retenix_test"
+            echo "DEMO_MODE=0"
+          } >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:push
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # Targets the spec BY PATH: `pnpm e2e -- --grep @beat` does not forward
+      # the flag and silently runs the whole suite (module 16 handoff).
+      - name: golden path
+        run: pnpm exec playwright test --config e2e/playwright.config.ts e2e/golden-path.spec.ts
+
+      # doc 01 / doc 17: axe over the four shell routes. Doc 17 §CI/CD lists axe
+      # under ci.yml, but it is a Playwright spec needing a browser, a booted
+      # dev server, and Postgres — reproducing that in ci.yml would duplicate
+      # this entire job for six assertions.
+      #
+      # BLOCKING as of its first CI run (6/6 in 28s, PR #3). It landed
+      # continue-on-error only because it had never executed in CI and its
+      # networkidle waits plus a computed-style focus-ring assertion were the
+      # kind of thing that behaves differently on a cold Turbopack compile.
+      # It didn't, so accessibility is a real gate now rather than a report.
+      - name: axe (WCAG 2.2 AA)
+        run: pnpm exec playwright test --config e2e/playwright.config.ts e2e/a11y-shell.spec.ts
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Runs the same beats against a deployed staging environment, where DEMO_MODE
+  # is on and the worker is reachable. Skipped entirely until the owner sets the
+  # STAGING_APP_BASE_URL repo variable — `vars` IS a valid context in a job-level
+  # `if:` (unlike `secrets`), so this needs no gate job.
+  staging:
+    if: github.ref == 'refs/heads/main' && vars.STAGING_APP_BASE_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: golden path against staging
+        env:
+          # No webServer boots for a remote baseURL (e2e/playwright.config.ts).
+          APP_BASE_URL: ${{ vars.STAGING_APP_BASE_URL }}
+          WORKER_INTERNAL_URL: ${{ vars.STAGING_WORKER_URL }}
+          INTERNAL_API_TOKEN: ${{ secrets.STAGING_INTERNAL_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.STAGING_SESSION_SECRET }}
+          GOLDEN_PATH_LIVE: "1"
+          DEMO_MODE: "1"
+        run: pnpm exec playwright test --config e2e/playwright.config.ts e2e/golden-path.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-staging
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

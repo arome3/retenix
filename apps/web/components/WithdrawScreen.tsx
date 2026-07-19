@@ -15,6 +15,8 @@ import {
   type SUPPORTED_TOKEN_TYPE,
 } from "@retenix/ua";
 import { networkName } from "@retenix/shared";
+
+import { useNamedSource } from "@/hooks/use-named-source";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { fmtUsd } from "@/lib/format";
 import {
@@ -58,6 +60,11 @@ export function WithdrawScreen({ eoa }: { eoa: string }) {
   const networks = asset
     ? networksForAsset(asset as unknown as SUPPORTED_TOKEN_TYPE)
     : [];
+
+  // PS-8.2: the destination step is doc 15's one sanctioned network-choice
+  // surface — it names them in the selector and again on the arrival line.
+  // Mirrors the render gate below exactly.
+  useNamedSource("withdraw", step === "destination" && asset !== null);
 
   // The chosen network decides which address family is valid — a mismatch is
   // caught here, before the confirm (the server re-validates regardless).

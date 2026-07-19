@@ -1,6 +1,8 @@
 "use client";
 
 import { networkName } from "@retenix/shared";
+
+import { useNamedSource } from "@/hooks/use-named-source";
 import {
   Sheet,
   SheetContent,
@@ -56,6 +58,11 @@ export function BreakdownSheet({
   summary: Summary;
 }) {
   const { buyingPowerUsd, sources, assets } = summary;
+  // PS-8.2: the Sources list names networks. Gated on `open` because this
+  // component is mounted unconditionally by BuyingPowerHeader, and on
+  // sources so an empty breakdown (which renders "Nothing funded yet")
+  // reports nothing.
+  useNamedSource("breakdown", open && sources.length !== 0);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

@@ -26,6 +26,13 @@ jobs:
       - run: pnpm contrast
       # doc 01 / G12: banned vocabulary in user copy is a release blocker
       - run: pnpm copy-canon
+      # doc 17: the repo is public and docs/ is private strategy — only the
+      # four judge-facing files may ever be tracked.
+      - run: pnpm check:docs
+      # doc 17: the worker ships on tsx, so every bare specifier must be
+      # declared by the package that imports it (a hoisted copy resolves here
+      # and vanishes on a production install).
+      - run: pnpm check:worker-deps
 
   unit:
     runs-on: ubuntu-latest
@@ -80,6 +87,56 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm eval:intent
+
+  # doc 17 §Test plan: "gitleaks green in CI; a `git log -p | grep`-style history
+  # scan finds nothing". Runs the gitleaks BINARY, not gitleaks-action: the CLI
+  # is MIT, while the action is EULA-licensed from v2 (free for personal repos,
+  # but this repo moving to an org would silently need a license key) and v2 is
+  # pinned to Node 20, which GitHub removes from runners on 2026-09-16.
+  #
+  # `gitleaks git` scans commit DIFFS, so it covers both the full history and
+  # everything currently at HEAD. History matters here specifically: on
+  # 2026-07-10 this repo was rewritten with filter-repo to purge docs/ and nine
+  # root planning files, and this job is the standing proof that worked.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — a shallow clone scans almost nothing
+      - name: install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: history scan
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner
+
+  # doc 17 (PS-8.1): the Vercel preview IS the judge-clickable artifact, so a
+  # build break must not first surface on Vercel after merge. `pnpm typecheck`
+  # cannot catch bundler-level failures — a server-only import pulled into a
+  # client component, a use-client boundary violation, Turbopack resolution —
+  # only `next build` can. Env comes from the committed .env.example, which
+  # makes this the DoD's ".env.example completeness" check too: add a required
+  # var to env.ts and forget the example, and this job goes red naming it.
+  # apps/worker's build is `tsc -b` + the runtime-deps guard, run by `lint`.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: web env (placeholders from the committed example)
+        run: grep -E '^[A-Z_][A-Z0-9_]*=' apps/web/.env.example >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      # SENTRY_AUTH_TOKEN is sntrys_PLACEHOLDER here, which next.config.ts reads
+      # as "no upload" — this build creates no release and makes no Sentry call.
+      - run: pnpm --filter web build
 
   pins:
     runs-on: ubuntu-latest

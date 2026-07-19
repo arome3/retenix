@@ -1,9 +1,9 @@
 # mainnet-smoke.yml — the daily $1 mainnet convert smoke (TS-14.6 / doc 16 §Continuous smoke).
 #
-# OWNERSHIP: doc 17 owns the canonical workflow file + the Slack webhook; doc 16
-# (this module) DRIVES its schedule + assertions + the budget contract. Authored
-# here because the Definition of Done needs the smoke green ≥5 consecutive days
-# pre-demo and doc 17 is not yet stood up — module 17 may later assume this file.
+# OWNERSHIP: authored by doc 16 because the DoD needed the smoke green ≥5 days
+# pre-demo before doc 17 stood up; ASSUMED by module 17 here, as that header
+# anticipated. Module 16 still drives the schedule, assertions, and the budget
+# contract — this module owns the file, the secret gating, and the Slack webhook.
 #
 # WHAT IT DOES (doc 16 §Continuous smoke): runs doc 03's smoke script via
 # walletSigner → polls to FINISHED → asserts the fee parse → posts to Slack.
@@ -16,10 +16,13 @@
 #   - the smoke wallet holds ≤ $50 total (hard bound by funding, the maximum
 #     possible loss from any CI malfunction — never raise it, never point at a
 #     user account);
-#   - SMOKE_CONVERT_USD=1 per run, ONE scheduled run/day (concurrency-guarded)
-#     ⇒ ≤ $1/day ≤ CI_DAILY_BUDGET_USD (5);
-#   - the preflight below refuses to run on gross mis-funding (a tripwire, not
+#   - SMOKE_CONVERT_USD=1 per run, and the daily guard below caps the number of
+#     runs so the day's spend can never reach CI_DAILY_BUDGET_USD (5);
+#   - the mis-funding preflight refuses on gross over-funding (a tripwire, not
 #     the cap — the cap is the funding itself).
+#
+# THIS WORKFLOW SPENDS REAL MONEY. Treat its secrets and guards as
+# production-critical (G7); every guard below fails CLOSED.
 name: mainnet-smoke
 
 on:
@@ -28,14 +31,114 @@ on:
     - cron: "0 13 * * *"
   workflow_dispatch: # manual "is the smoke green today?" (demo-day checklist)
 
-# One convert at a time — daily spend stays a single $1 convert even if a manual
-# run overlaps the cron.
+# Read-only. A workflow that moves money must never be able to write to the
+# repo. `actions: read` is exactly what the daily-spend guard needs to count
+# today's runs, and nothing more.
+permissions:
+  contents: read
+  actions: read
+
+# One convert at a time — a manual run overlapping the cron cannot double-spend.
+# NOTE this serialises but does not CAP: repeated workflow_dispatch runs would
+# each spend $1. Capping is the `budget` step's job, not this block's.
 concurrency:
   group: mainnet-smoke
   cancel-in-progress: false
 
+env:
+  # doc 00 §CI table. Overridable by repo VARIABLES for a drill, never raised
+  # here (G7). `vars` is legal in a workflow-level env block.
+  SMOKE_CONVERT_USD: ${{ vars.SMOKE_CONVERT_USD || '1' }}
+  CI_DAILY_BUDGET_USD: ${{ vars.CI_DAILY_BUDGET_USD || '5' }}
+
 jobs:
+  # ---------------------------------------------------------------------------
+  # PREFLIGHT — no install, no chain call, no spend. Decides whether today's
+  # convert is allowed to happen at all.
+  # ---------------------------------------------------------------------------
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.secrets.outputs.configured }}
+    steps:
+      # `secrets` is NOT a valid context in a job-level `if:` (actions/runner#520
+      # — "Unrecognized named-value: 'secrets'" at parse time). It IS legal in a
+      # step-level `env:`, so the gate has to be a step that sets an output and
+      # feeds the spending job through `needs`.
+      - name: secrets present?
+        id: secrets
+        env:
+          SMOKE_WALLET_PRIVATE_KEY: ${{ secrets.SMOKE_WALLET_PRIVATE_KEY }}
+          RPC_URL_ARBITRUM: ${{ secrets.RPC_URL_ARBITRUM }}
+          PARTICLE_PROJECT_ID: ${{ secrets.PARTICLE_PROJECT_ID }}
+          PARTICLE_CLIENT_KEY: ${{ secrets.PARTICLE_CLIENT_KEY }}
+          PARTICLE_APP_UUID: ${{ secrets.PARTICLE_APP_UUID }}
+        run: |
+          missing=""
+          for name in SMOKE_WALLET_PRIVATE_KEY RPC_URL_ARBITRUM \
+                      PARTICLE_PROJECT_ID PARTICLE_CLIENT_KEY PARTICLE_APP_UUID; do
+            [ -z "${!name}" ] && missing="$missing $name"
+          done
+
+          if [ -z "$missing" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "all smoke secrets present"
+            exit 0
+          fi
+
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+
+          # A human asked for a smoke run and cannot have one: that is an error.
+          # The scheduled run is different — until the owner provisions these,
+          # failing daily would train everyone to ignore this workflow, and then
+          # nobody notices the day it goes red for a REAL reason. So the cron
+          # warns loudly and stops, and the smoke job is skipped, not "passed".
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::error::mainnet-smoke cannot run — missing secrets:$missing"
+            exit 1
+          fi
+          echo "::warning::mainnet-smoke NOT CONFIGURED — missing secrets:$missing (see docs/deployments.md)"
+
+      # Counts today's runs of THIS workflow and prices them at SMOKE_CONVERT_USD.
+      #
+      # Chosen over the alternatives, both rejected: a committed ledger needs
+      # `contents: write` on a money-moving workflow and its bot commits
+      # contradict doc 17's commit-history requirement; a wallet-balance delta
+      # measures the wrong quantity entirely, since a convert is value-preserving
+      # and any delta observed is dominated by market drift.
+      #
+      # PROPOSED: "today's recorded spend" is defined in no doc. If the owner
+      # prefers another definition, only this step changes.
+      - name: daily budget guard
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          today="$(date -u +%Y-%m-%d)"
+
+          # Fail CLOSED: for a spending job, "I could not determine the budget"
+          # must mean "do not spend".
+          if ! runs="$(gh api --paginate \
+                "/repos/${GITHUB_REPOSITORY}/actions/workflows/mainnet-smoke.yml/runs?created=%3E%3D${today}&per_page=100" \
+                --jq '[.workflow_runs[] | select(.id != ${{ github.run_id }})] | length')"; then
+            echo "::error::cannot reach the Actions API to price today's spend — refusing to spend"
+            exit 1
+          fi
+
+          spent=$(( runs * ${SMOKE_CONVERT_USD} ))
+          echo "today (${today} UTC): ${runs} prior run(s) × \$${SMOKE_CONVERT_USD} = \$${spent} of \$${CI_DAILY_BUDGET_USD}"
+
+          # doc 17: "refuses to run if today's recorded spend >= CI_DAILY_BUDGET_USD".
+          if [ "${spent}" -ge "${CI_DAILY_BUDGET_USD}" ]; then
+            echo "::error::REFUSING — today's spend \$${spent} has reached CI_DAILY_BUDGET_USD \$${CI_DAILY_BUDGET_USD} (G7)"
+            exit 1
+          fi
+          echo "within the daily envelope"
+
   smoke:
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,9 +149,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # Mis-funding tripwire (doc 17): refuse to spend if the smoke wallet holds
-      # far more native than a $50 wallet ever should. The USD cap is enforced by
-      # funding (G7); this only catches "someone sent real money here by mistake".
+      # Mis-funding tripwire: refuse to spend if the smoke wallet holds far more
+      # native than a $50 wallet ever should. The USD cap is enforced by funding
+      # (G7); this only catches "someone sent real money here by mistake".
       - name: budget preflight
         working-directory: packages/ua
         env:
@@ -79,25 +182,31 @@ jobs:
           PARTICLE_CLIENT_KEY: ${{ secrets.PARTICLE_CLIENT_KEY }}
           PARTICLE_APP_UUID: ${{ secrets.PARTICLE_APP_UUID }}
           SMOKE_WALLET_PRIVATE_KEY: ${{ secrets.SMOKE_WALLET_PRIVATE_KEY }}
-          SMOKE_CONVERT_USD: "1"
+          SMOKE_CONVERT_USD: ${{ env.SMOKE_CONVERT_USD }}
         run: pnpm --filter @retenix/ua smoke
 
-      # Post the outcome to the Slack status webhook (doc 17). Informational-only
-      # if the webhook isn't configured — never fails the job.
+      # Post the outcome to the Slack status webhook. The message shape mirrors
+      # apps/worker/src/notify.ts's smokeResult() — that helper is the canonical
+      # format, but it runs in the worker process and cannot be called from a
+      # GitHub runner, so this curl restates it. Keep the two in step.
+      # Informational-only if the webhook isn't configured — never fails the job,
+      # because a missing webhook must not mask a RED smoke.
       - name: post result to Slack
         if: always()
         env:
           SLACK_STATUS_WEBHOOK_URL: ${{ secrets.SLACK_STATUS_WEBHOOK_URL }}
           OUTCOME: ${{ steps.smoke.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -z "${SLACK_STATUS_WEBHOOK_URL}" ]; then
             echo "no SLACK_STATUS_WEBHOOK_URL — skipping Slack post"
             exit 0
           fi
           if [ "${OUTCOME}" = "success" ]; then
-            TEXT=":white_check_mark: mainnet-smoke green — \$1 convert FINISHED (run ${GITHUB_RUN_ID})"
+            TEXT=":white_check_mark: mainnet-smoke green — \$${SMOKE_CONVERT_USD} convert FINISHED · ${RUN_URL}"
           else
-            TEXT=":rotating_light: mainnet-smoke RED — \$1 convert did not FINISH. STOP feature work, diagnose. (run ${GITHUB_RUN_ID})"
+            TEXT=":rotating_light: mainnet-smoke RED — \$${SMOKE_CONVERT_USD} convert did not FINISH. STOP feature work, diagnose. · ${RUN_URL}"
           fi
           curl -sS -X POST -H 'content-type: application/json' \
-            --data "{\"text\":\"${TEXT}\"}" "${SLACK_STATUS_WEBHOOK_URL}" || true
+            --data "$(printf '{"text":%s}' "$(printf '%s' "$TEXT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" \
+            "${SLACK_STATUS_WEBHOOK_URL}" || true

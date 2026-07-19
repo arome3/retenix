@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./escrow": "./src/escrow-crypto.ts"
+    "./escrow": "./src/escrow-crypto.ts",
+    "./observability": "./src/observability.ts"
   },
   "scripts": {
     "build": "tsc -b"

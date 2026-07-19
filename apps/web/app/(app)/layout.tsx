@@ -1,5 +1,6 @@
 import { CountdownBanner } from "@/components/CountdownBanner";
 import { CountdownBannerSlot } from "@/components/CountdownBannerSlot";
+import { SessionBeacon } from "@/components/SessionBeacon";
 import { SkipToContent } from "@/components/SkipToContent";
 import { TabBar } from "@/components/TabBar";
 import { ThemeScope } from "@/components/ThemeScope";
@@ -26,6 +27,10 @@ export default async function AppLayout({
         <CountdownBannerSlot />
         {/* C8 (doc 14) — portals into the slot above while a countdown is live */}
         <CountdownBanner eoa={session.eoa} />
+        {/* PS-8.2 denominator (doc 17): a session with zero chain-name
+            exposure emits nothing, so without this the metric has no total to
+            divide by. Renders nothing. */}
+        <SessionBeacon />
         <main
           id="main"
           className="flex-1 px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1.5rem)] md:px-6"

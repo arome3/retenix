@@ -24,6 +24,7 @@ import {
 import { activityUrl } from "@retenix/ua";
 import { Num } from "@/components/Num";
 import { legFeeText, legOutcomeLabel, receiptTimestamp } from "@/lib/feed-view";
+import { useNamedSource } from "@/hooks/use-named-source";
 
 export interface ReceiptDetailProps {
   item: FeedItem;
@@ -49,6 +50,12 @@ export function ReceiptDetail({
   onRetryLeg,
 }: ReceiptDetailProps) {
   const detail = item.detail;
+  // PS-8.2: the expansion names funding sources. A receipt that expands
+  // without naming anything reveals nothing and reports nothing.
+  useNamedSource(
+    "receipt",
+    (detail?.sources?.length ?? 0) !== 0 || (detail?.legs?.length ?? 0) !== 0,
+  );
   const split = detail?.fees ? splitFeesForDisplay(detail.fees) : null;
   // An executed receipt should always have its split (fees_json is written at
   // finish time) — its absence means webhook lag, said honestly (PROPOSED copy).

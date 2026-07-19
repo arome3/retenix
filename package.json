@@ -18,6 +18,8 @@
     "seed:demo": "tsx e2e/seed/demo.ts",
     "eval:intent": "tsx e2e/intent-eval/run.ts",
     "check:pins": "node scripts/check-pins.mjs",
+    "check:docs": "node scripts/check-docs-tracked.mjs",
+    "check:worker-deps": "node scripts/check-worker-runtime-deps.mjs",
     "contrast": "node --experimental-strip-types scripts/contrast.ts",
     "copy-canon": "node scripts/copy-canon.mjs"
   },
