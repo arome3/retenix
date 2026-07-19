@@ -16,6 +16,7 @@
     ]
   },
   "deploy": {
+    "preDeployCommand": "pnpm db:push",
     "startCommand": "pnpm --filter worker start",
     "healthcheckPath": "/healthz",
     "healthcheckTimeout": 300,

@@ -245,6 +245,17 @@ Each step needs a human at a dashboard or a funded wallet.
    plugin. Set `RAILPACK_NODE_VERSION=22.16.0`: `pg-boss@12` declares
    `node >=22.12` while the repo's `engines` says `>=20`. Pick an **always-on**
    tier — a sleep-on-idle plan silently stops the scheduler (G9).
+
+   **Schema.** `railway.json` sets `preDeployCommand: pnpm db:push`, which runs
+   against the new deployment before it serves traffic. Without it a fresh
+   Postgres has no tables at all and the worker fails on its first query — CI
+   applies the schema to its own throwaway database, and nothing was applying it
+   here. Two properties worth knowing: `drizzle-kit` is a devDependency, which
+   is correct because a pre-deploy step is deploy-time tooling in the same
+   category as `tsc` (unlike `tsx`, which is runtime and therefore a real
+   dependency); and `push` is deliberately run **without `--force`**, so a
+   change that would truncate data fails the deploy loudly instead of applying
+   itself to production.
 3. **Sentry** — org + two projects (web, worker). Put the DSNs in Vercel and
    Railway, and `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` in Vercel
    for source-map upload.
