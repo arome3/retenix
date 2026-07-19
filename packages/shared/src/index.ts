@@ -22,3 +22,4 @@ export * from "./security";
 export * from "./quote";
 export * from "./market-hours";
 export * from "./hedge";
+export * from "./drawdown";
