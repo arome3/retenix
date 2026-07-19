@@ -4,6 +4,7 @@ import {
   buildSignedMessage,
   COMPLIANCE_EVENTS,
   computeInputHash,
+  isDerivativesEligible,
   isLeverageUnlocked,
   sigEnvelopeSchema,
 } from "@retenix/shared";
@@ -98,6 +99,29 @@ export const gatedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 });
 
 // ---------------------------------------------------------------------------
+// derivativesGatedProcedure — gated PLUS a derivatives-eligible region
+// (doc 19 PS-F12-AC6). Composed ON TOP of gatedProcedure, never a fork of it,
+// so the region it reads is the same per-request DB read.
+//
+// NOT_FOUND, deliberately NOT FORBIDDEN: AC6 says hedge features are hidden
+// ENTIRELY in blocked regions, and a FORBIDDEN body announces that the feature
+// exists and that the user is the wrong kind of person to have it. This is the
+// server twin of SellAction.tsx's early `return null` — the surface simply is
+// not there.
+//
+// ⚠ Hedge CLOSE paths must NOT compose off this. routers/security.ts records
+// the rule: "a safety surface must not 403 on gate state". A user whose region
+// changed, or whose gate state is somehow stale, must still be able to close an
+// open position — the kill switch depends on it.
+// ---------------------------------------------------------------------------
+export const derivativesGatedProcedure = gatedProcedure.use(async ({ ctx, next }) => {
+  if (!isDerivativesEligible(ctx.session.region)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "not available" });
+  }
+  return next();
+});
+
+// ---------------------------------------------------------------------------
 // signedProcedure — protected PLUS a fresh personal_sign payload from the
 // user's EOA over { route, inputHash, nonce, expiry }, verified with
 // ethers.verifyMessage. Nonces are single-use (strictly greater than the
@@ -186,6 +210,18 @@ export const gatedSignedProcedure = protectedProcedure
     await verifySignedEnvelope(ctx.db, ctx.session, path, await getRawInput());
     return next();
   });
+
+// ---------------------------------------------------------------------------
+// derivativesGatedSignedProcedure — the signed twin (doc 19's plans.setHedgeMode).
+// Region check runs BEFORE the signature for the same reason gatedSignedProcedure
+// puts the gate first: a blocked-region request must never consume a nonce.
+// ---------------------------------------------------------------------------
+export const derivativesGatedSignedProcedure = derivativesGatedProcedure.use(
+  async ({ ctx, path, getRawInput, next }) => {
+    await verifySignedEnvelope(ctx.db, ctx.session, path, await getRawInput());
+    return next();
+  },
+);
 
 // Single-use enforcement: lock the user row to serialize concurrent attempts,
 // then require the nonce to be strictly greater than the last one seen.

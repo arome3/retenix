@@ -5,11 +5,16 @@ import {
   EQUITY_RESTRICTED_REGIONS,
   isAssetEligibleInRegion,
   isEquityEligible,
+  DERIVATIVES_RESTRICTED_REGIONS,
+  HEDGE_ACK_TEXT,
+  HEDGE_ACK_VERSION,
+  isDerivativesEligible,
   isGatePassed,
   isLeverageUnlocked,
   isQuizAllCorrect,
   isSanctioned,
   isValidRegion,
+  COMPLIANCE_EVENTS,
   LEVERAGE_QUIZ_ID,
   SANCTIONED_REGIONS,
 } from "./compliance";
@@ -245,5 +250,81 @@ describe("leverage unlock (doc 18 F11)", () => {
     const answers = correctIndices();
     answers[3] = COMPLIANCE_QUIZ[3].options.findIndex((o) => !o.correct);
     expect(isLeverageUnlocked(answers)).toBe(false);
+  });
+});
+
+describe("derivatives jurisdiction gate (doc 19 PS-F12-AC6)", () => {
+  it("FAILS CLOSED on an unset region — the divergence from isEquityEligible", () => {
+    // users.region is "" until the gate finalizes. isEquityEligible("") is TRUE
+    // (it is in no block list), which is harmless for equities because
+    // gatedProcedure refuses pre-gate requests anyway. Here it would be a hole.
+    expect(isEquityEligible("")).toBe(true);
+    expect(isDerivativesEligible("")).toBe(false);
+  });
+
+  it.each([...EQUITY_RESTRICTED_REGIONS])("blocks the equity-restricted region %s", (r) => {
+    expect(isDerivativesEligible(r)).toBe(false);
+  });
+
+  it.each([...SANCTIONED_REGIONS])("blocks the sanctioned region %s", (r) => {
+    expect(isDerivativesEligible(r)).toBe(false);
+  });
+
+  it("does NOT block the EEA — ESMA restricts CFDs, it does not ban them", () => {
+    // Our hedge already meets ESMA's posture: leverage capped at 2.0x ONCHAIN
+    // and an explicit acknowledgment before enabling. Blocking the EEA would
+    // over-block a jurisdiction whose own rules we satisfy — and would hide the
+    // feature from the DE demo seed.
+    for (const r of ["DE", "FR", "IE", "NL", "ES", "IT", "SE", "PL"]) {
+      expect(isDerivativesEligible(r), `${r} should see hedging`).toBe(true);
+    }
+  });
+
+  it("allows the ordinary non-restricted world", () => {
+    for (const r of ["NG", "BR", "JP", "ZA", "SG"]) {
+      expect(isDerivativesEligible(r)).toBe(true);
+    }
+  });
+
+  it("is exactly the union of the two existing lists — defined once, never copied", () => {
+    expect([...DERIVATIVES_RESTRICTED_REGIONS].sort()).toEqual(
+      [...EQUITY_RESTRICTED_REGIONS, ...SANCTIONED_REGIONS].sort(),
+    );
+  });
+
+  it("is at least as strict as the equity gate — you can never hedge what you cannot hold", () => {
+    for (const r of ["US", "CA", "GB", "AU", "DE", "NG", "IR", ""]) {
+      if (isDerivativesEligible(r)) expect(isEquityEligible(r)).toBe(true);
+    }
+  });
+});
+
+describe("hedge acknowledgment (doc 19 PS-F12-AC6)", () => {
+  it("is audit-only — a compliance event, never a feed receipt", () => {
+    expect(COMPLIANCE_EVENTS.hedgeAcknowledged).toBe("compliance.hedge_acknowledged");
+    expect(COMPLIANCE_EVENTS.hedgeAcknowledged.startsWith("compliance.")).toBe(true);
+  });
+
+  it("carries the three ESMA elements without fabricating a loss statistic", () => {
+    // ESMA's canonical warning cites a "% of retail accounts lose money" figure.
+    // We have no such number and will not invent one.
+    expect(HEDGE_ACK_TEXT).toMatch(/leveraged/i);
+    expect(HEDGE_ACK_TEXT).toMatch(/lose money quickly/i);
+    expect(HEDGE_ACK_TEXT).toMatch(/funding costs/i);
+    expect(HEDGE_ACK_TEXT).not.toMatch(/\d+(\.\d+)?\s*%\s*of retail/i);
+  });
+
+  it("states the thing a HEDGING user specifically must understand", () => {
+    // A protective short loses when the rest of the portfolio wins. No generic
+    // CFD warning says this, and it is the whole shape of the product.
+    expect(HEDGE_ACK_TEXT).toMatch(/when my other holdings are gaining/i);
+  });
+
+  it("does not overstate the risk either — losses ARE bounded", () => {
+    expect(HEDGE_ACK_TEXT).toMatch(/limited to the amount committed/i);
+  });
+
+  it("is versioned, so editing the wording re-prompts everyone", () => {
+    expect(HEDGE_ACK_VERSION).toMatch(/^hedge-ack-\d{4}-\d{2}-v\d+$/);
   });
 });

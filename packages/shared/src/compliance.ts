@@ -50,6 +50,57 @@ export function isSanctioned(region: string): boolean {
 }
 
 /**
+ * Regions where DERIVATIVES surfaces (doc 19 Guardian Hedge) are withheld
+ * ENTIRELY — hidden, not disabled (PS-F12-AC6).
+ *
+ * A SIBLING PREDICATE, deliberately not a fourth `AssetEligibility` value: that
+ * union is a property of a REGISTRY ROW, and a hedge has no registry row. A
+ * fourth value would be dead data no asset ever carries, flowing into a filter
+ * that has nothing to do with it. `isEquityEligible`/`isSanctioned` are the
+ * established shape — two independent region predicates that
+ * `isAssetEligibleInRegion` composes; this is the third.
+ *
+ * ⚠ PROPOSED (doc 18 Open Question 3 — "exact jurisdiction list for perps UI —
+ * legal review (ESMA/MiFID)"), pending the doc-04 compliance owner, exactly the
+ * posture module 20 took for OQ-R2. The founder ruling of 2026-07-18:
+ *
+ *   ESMA RESTRICTS retail CFDs, it does not ban them — a leverage cap, risk
+ *   warnings and a narrow target market. Our hedge already meets that posture
+ *   by construction: leverage is capped at 2.0x ONCHAIN (RetenixHedge, not an
+ *   app-level check) and enabling requires an explicit acknowledgment. So the
+ *   EEA is NOT blocked; blocking it would over-block a jurisdiction whose own
+ *   rules we satisfy.
+ *
+ *   The hard blocks are the US (retail off-exchange leveraged products are
+ *   effectively barred, and every offshore perps venue geoblocks it) plus the
+ *   comprehensively-sanctioned list, plus the existing equity-restricted set so
+ *   a region that may not hold the spot asset can never hedge it either.
+ *
+ * Composed from the two existing lists so they stay defined ONCE.
+ */
+export const DERIVATIVES_RESTRICTED_REGIONS = [
+  ...EQUITY_RESTRICTED_REGIONS,
+  ...SANCTIONED_REGIONS,
+] as const;
+
+/**
+ * false iff derivatives surfaces are withheld from this region.
+ *
+ * NOTE THE EMPTY-REGION GUARD, and that it DIVERGES from `isEquityEligible` on
+ * purpose. `users.region` is `""` until the gate finalizes, and
+ * `isEquityEligible("")` returns TRUE because `""` is in no block list. That is
+ * harmless for equities — `gatedProcedure` refuses pre-gate requests anyway —
+ * but here it would be a hole: derivatives must fail CLOSED on an unknown
+ * region, never open.
+ */
+export function isDerivativesEligible(region: string): boolean {
+  return (
+    region !== "" &&
+    !(DERIVATIVES_RESTRICTED_REGIONS as readonly string[]).includes(region)
+  );
+}
+
+/**
  * A registry entry's regional availability (doc 04 / doc 20):
  *   - "ALL"           — SOL/ETH and any always-available asset (every region).
  *   - "NON_RESTRICTED" — tokenized equities: blocked in US/CA/GB/AU.
@@ -103,10 +154,32 @@ export const COMPLIANCE_EVENTS = {
   quizPassed: "compliance.quiz_passed",
   identitySimulated: "compliance.identity_simulated",
   riskAcknowledged: "compliance.risk_acknowledged",
+  /** doc 19 PS-F12-AC6 — the EXTRA acknowledgment before Hedge mode can be
+   *  enabled. Audit-only: never add it to FEED_EVENT_TYPES (compliance.* rows
+   *  are audit, not receipts), and never let it write users.region — that
+   *  column is written in exactly one place (see this file's header). */
+  hedgeAcknowledged: "compliance.hedge_acknowledged",
 } as const;
 
 export type ComplianceEventType =
   (typeof COMPLIANCE_EVENTS)[keyof typeof COMPLIANCE_EVENTS];
+
+/**
+ * The artifacts the ONBOARDING GATE writes — exactly one row each, for every
+ * user who completes it.
+ *
+ * `hedgeAcknowledged` is deliberately NOT here: it is a mid-app acknowledgment
+ * (doc 19 PS-F12-AC6) written only when a user enables Hedge mode, so a user
+ * who never does has zero of them. Keeping the two sets distinct is what lets
+ * the idempotency test assert "exactly one of each" without that claim
+ * silently becoming false every time a non-gate compliance event is added.
+ */
+export const GATE_COMPLIANCE_EVENTS = [
+  COMPLIANCE_EVENTS.regionSet,
+  COMPLIANCE_EVENTS.quizPassed,
+  COMPLIANCE_EVENTS.identitySimulated,
+  COMPLIANCE_EVENTS.riskAcknowledged,
+] as const;
 
 // ---------------------------------------------------------------------------
 // Appropriateness quiz — one source for client rendering AND server validation
@@ -231,6 +304,38 @@ export function isLeverageUnlocked(answers: unknown): boolean {
 export const quizAnswersSchema = z
   .array(z.number().int().nonnegative())
   .length(COMPLIANCE_QUIZ.length);
+
+// ---------------------------------------------------------------------------
+// Hedge risk acknowledgment (doc 19 PS-F12-AC6)
+// ---------------------------------------------------------------------------
+
+/** Bump on ANY edit to the text below. The read-back filters on this, so a
+ *  bump automatically re-prompts every user — that is the point of versioning
+ *  it rather than just storing a boolean. */
+export const HEDGE_ACK_VERSION = "hedge-ack-2026-07-v1";
+
+/**
+ * ESMA-style risk acknowledgment, shown once before Hedge mode can be enabled.
+ *
+ * THIS IS THE ONE SURFACE WHERE "leveraged" IS SANCTIONED COPY (doc 19 G12:
+ * "perps/leverage/margin appear only in the risk acknowledgment, which is a
+ * compliance surface"). It lives in packages/shared, which copy-canon does not
+ * scan — the same exemption-by-location the quiz already relies on — and the
+ * component renders the identifier, never a literal.
+ *
+ * ESMA's canonical CFD warning cites a "% of retail accounts lose money"
+ * figure. We do not have one and will not fabricate one, so the three required
+ * elements are carried honestly instead: that it is leveraged, that it can lose
+ * quickly, and by what mechanisms.
+ *
+ * The first clause states the thing no generic warning says and that a HEDGING
+ * user specifically must understand: this position loses money when the rest of
+ * the portfolio is winning. That is not a defect — it is what protection costs.
+ * And losses ARE bounded by the committed collateral, so claiming otherwise
+ * would be as dishonest as hiding a risk.
+ */
+export const HEDGE_ACK_TEXT =
+  "I understand a protective short is a leveraged position that can lose money quickly — including when my other holdings are gaining. Its losses are limited to the amount committed to it, it accrues funding costs while it is open, and it can be closed automatically if the market moves against it. Retenix gives no investment advice.";
 
 // ---------------------------------------------------------------------------
 // Countries — full ISO 3166-1 alpha-2 list (region is self-attested; no geo-IP
