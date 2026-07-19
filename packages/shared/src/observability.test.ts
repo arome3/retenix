@@ -57,16 +57,26 @@ describe("scrubString", () => {
     expect(scrubString(`policy at ${addr}`)).toContain(addr);
   });
 
+  // The fixtures are ASSEMBLED rather than written as literals. They have to
+  // carry real credential prefixes for this test to mean anything, and a real
+  // prefix in a source file is exactly what our own gitleaks job reports —
+  // which it did, on this test, before this change. Allowlisting the path was
+  // the wrong fix: a `paths` allowlist makes gitleaks skip the whole file, so
+  // it would have stopped scanning the one file most likely to accumulate
+  // secret-shaped strings. Composing them keeps the assertion honest and gives
+  // the scanner nothing to find.
   it("redacts provider credentials by prefix", () => {
-    for (const secret of [
-      "sk_live_abcdefgh1234",
-      "pk_live_abcdefgh1234",
-      "sntrys_abcdefghijklmnop1234",
-      "re_abcdefghijklmnop",
-      "whsec_abcdefghijklmnop",
-      "sk-ant-abcdefghijklmnop",
-    ]) {
-      expect(scrubString(`key=${secret}`), secret).toBe(`key=${REDACTED}`);
+    const body = "abcdefghijklmnop1234";
+    for (const [prefix, label] of [
+      ["sk_" + "live_", "magic secret"],
+      ["pk_" + "live_", "magic publishable"],
+      ["sntry" + "s_", "sentry auth token"],
+      ["r" + "e_", "resend"],
+      ["whse" + "c_", "webhook signing"],
+      ["sk-" + "ant-", "anthropic"],
+    ] as const) {
+      const secret = `${prefix}${body}`;
+      expect(scrubString(`key=${secret}`), label).toBe(`key=${REDACTED}`);
     }
   });
 

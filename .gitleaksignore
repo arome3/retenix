@@ -1,0 +1,15 @@
+# Accepted gitleaks findings, by fingerprint (commit:path:rule:line).
+#
+# One entry per line, each with a reason. A fingerprint is pinned to an exact
+# commit, so this can never silently accept a NEW occurrence of the same string
+# in a later commit — which is why it is the right tool here and a `paths`
+# allowlist in .gitleaks.toml is not (that would make gitleaks skip the whole
+# file and stop scanning it for anything).
+
+# A deliberately fake Magic key in the PII-scrubber's own test, asserting that
+# sk_live_… is redacted. The literal had to carry a real prefix for the test to
+# mean anything — which is precisely what the scanner reports. Reworked in a
+# later commit to assemble the fixtures from parts, so no secret-shaped literal
+# exists in the working tree; this entry covers the commit that introduced it.
+# The value is fabricated and worth nothing.
+481aec793088cb308d039f7622c48f1fb5444341:packages/shared/src/observability.test.ts:stripe-access-token:62
