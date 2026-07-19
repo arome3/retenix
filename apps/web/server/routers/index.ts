@@ -11,6 +11,7 @@ import { portfolioRouter } from "./portfolio";
 import { securityRouter } from "./security";
 import { sendRouter } from "./send";
 import { sweepRouter } from "./sweep";
+import { telemetryRouter } from "./telemetry";
 
 // Canonical tRPC surface (tech spec §13); each route is implemented in its
 // owner module — names and procedure classes never change. security.* are
@@ -28,6 +29,9 @@ export const appRouter = router({
   estate: estateRouter,
   send: sendRouter,
   security: securityRouter,
+  // doc 17 (PS-8.2): product instrumentation. Not in tech spec §13's list —
+  // it writes events rows only, never product state.
+  telemetry: telemetryRouter,
 });
 
 export type AppRouter = typeof appRouter;

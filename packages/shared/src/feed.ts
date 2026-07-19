@@ -188,6 +188,29 @@ const KNOWN_NETWORK_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Does this DISPLAYED sentence put a source's proper name on screen? (PS-8.2)
+ *
+ * Needed because `compactSentence` only elides names inside a `funded from …`
+ * segment. Estate receipts do not use that shape — receipts.ts renders
+ * "Checked in — your activity on Base kept your inheritance plan current." —
+ * and C4 shows it in the COMPACT row, unexpanded. An expansion-only exposure
+ * hook would score those sessions as clean, which is precisely the flattering
+ * metric PS-8.2 exists to prevent.
+ *
+ * Case-sensitive on purpose: the six display names are capitalised, so
+ * "based on" and "codebase" cannot false-positive on "Base".
+ */
+const NAMED_SOURCE_RE = new RegExp(
+  `\\b(?:${[...KNOWN_NETWORK_NAMES]
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|")}|Source \\d+)\\b`,
+);
+
+export function namesAKnownSource(sentence: string): boolean {
+  return NAMED_SOURCE_RE.test(sentence);
+}
+
+/**
  * The C4 compact form of a stored sentence — three mechanical elisions, never
  * composition (CONFLICTS #18):
  *   1. the fee-split parenthetical is elided (the expansion always shows it);

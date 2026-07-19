@@ -11,6 +11,7 @@ import {
   type SweepProgress,
 } from "@/lib/sweep-runner";
 import { trpc } from "@/lib/trpc";
+import { useNamedSource } from "@/hooks/use-named-source";
 
 /*
  * The first-session dust-sweep prompt (doc 06; S2 hosts it — the home shell
@@ -79,6 +80,12 @@ export function SweepPromptCard({ eoa }: { eoa: string }) {
   }, [eoa, utils]);
 
   const sheetOpen = flow.kind !== "idle";
+  // PS-8.2: the completed-sweep receipt lists per-network legs. Placed here,
+  // ABOVE the early returns below — Rules of Hooks.
+  useNamedSource(
+    "sweep",
+    flow.kind === "done" && flow.receipt.legs.length !== 0,
+  );
 
   if (preview.isPending || preview.error) return null;
   const { totalUsd, items, fees, hasSwept, dismissed } = preview.data;

@@ -1,5 +1,6 @@
-import { getDb, users } from "@retenix/db";
-import { eq } from "drizzle-orm";
+import { events, getDb, users } from "@retenix/db";
+import { UI_EVENTS } from "@retenix/shared";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashEmail } from "@/lib/emailHash";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
@@ -51,6 +52,14 @@ function happyPath() {
 }
 
 async function cleanup() {
+  // events first: magicCallback writes a user.signup row (doc 17, PS-8.2
+  // activation clock), and events.user_id has an FK to users.
+  await db.delete(events).where(
+    inArray(
+      events.userId,
+      db.select({ id: users.id }).from(users).where(eq(users.emailHash, hashEmail(EMAIL))),
+    ),
+  );
   await db.delete(users).where(eq(users.emailHash, hashEmail(EMAIL)));
 }
 
@@ -202,6 +211,31 @@ describe("auth.magicCallback — success path (integration, real Postgres)", () 
       .from(users)
       .where(eq(users.emailHash, hashEmail(EMAIL)));
     expect(rows).toHaveLength(1);
+  });
+
+  // doc 17 (PS-8.2): the activation clock. The upsert cannot distinguish a
+  // first login from a returning one, so the row is guarded on the event —
+  // if that guard broke, "first funded policy < 10 min from signup" would
+  // silently re-baseline to the user's most recent login.
+  it("records user.signup exactly once, however many times you log in", async () => {
+    happyPath();
+    await appRouter.createCaller(makeCtx()).auth.magicCallback({ didToken: "valid" });
+    await appRouter.createCaller(makeCtx()).auth.magicCallback({ didToken: "valid" });
+    await appRouter.createCaller(makeCtx()).auth.magicCallback({ didToken: "valid" });
+
+    const signups = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(
+        and(
+          eq(events.type, UI_EVENTS.signup),
+          inArray(
+            events.userId,
+            db.select({ id: users.id }).from(users).where(eq(users.emailHash, hashEmail(EMAIL))),
+          ),
+        ),
+      );
+    expect(signups).toHaveLength(1);
   });
 });
 

@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { events, users } from "@retenix/db";
+import { UI_EVENTS } from "@retenix/shared";
 import { and, eq, sql } from "drizzle-orm";
 import { getAddress } from "ethers";
 import { z } from "zod";
@@ -71,6 +72,23 @@ export const authRouter = router({
         })
         .onConflictDoUpdate({ target: users.emailHash, set: { eoaAddr } })
         .returning({ id: users.id, region: users.region });
+
+      // PS-8.2 activation clock (doc 17). The upsert cannot tell first login
+      // from returning login, so this is guarded on the event rather than the
+      // user row — the same shape trackOnboarding below uses. Written once per
+      // user, ever; paired with the existing plan.activated for "first funded
+      // policy < 10 min from signup". A duplicate would be harmless anyway
+      // (the metric takes min(created_at)), but it should not happen.
+      const [signedUp] = await ctx.db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.type, UI_EVENTS.signup), eq(events.userId, row.id)))
+        .limit(1);
+      if (!signedUp) {
+        await ctx.db
+          .insert(events)
+          .values({ userId: row.id, type: UI_EVENTS.signup, payloadJson: {} });
+      }
 
       await setSessionCookie(ctx, {
         userId: row.id,

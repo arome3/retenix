@@ -75,4 +75,19 @@ export const events = pgTable("events", {
   type: text("type").notNull(),                        // e.g. sweep.receipt, estate.checkin, kill.leg
   payloadJson: jsonb("payload_json").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+},
+// Module 17: this table had NO indexes and is the busiest read in the app.
+// It backs the activity feed, the signed-route nonce check (every signed
+// mutation), assertGatePassed (every gated request), the estate claim-email
+// freshness check, and now the PS-8.2 idempotency guards. The spec'd schema
+// (doc 00 / tech spec §12) declares no indexes; these are additive and change
+// no column.
+(t) => [
+  index("events_type_created_idx").on(t.type, t.createdAt),
+  index("events_user_type_idx").on(t.userId, t.type),
+  // A functional index on payload_json->>'sid' was tried and REMOVED: with
+  // `type` in the predicate the planner picks events_type_created_idx and
+  // applies the sid as a filter (verified with EXPLAIN), so the extra index
+  // would cost a write on every events insert — and events is written on every
+  // signed mutation — to serve a read nothing uses.
+]);

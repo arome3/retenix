@@ -18,6 +18,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { CopyChip } from "@/components/CopyChip";
 import { personalSign, signEnvelope } from "@/lib/sign";
 import { trpc } from "@/lib/trpc";
+import { useNamedSource } from "@/hooks/use-named-source";
 import { trpcVanilla } from "@/lib/trpc-vanilla"; // copy-canon-allow (scanner segment spans the doc-15 verbatim constant below)
 
 // PS-4.3 required copy — verbatim (the sanctioned trust-proof phrase,
@@ -61,6 +62,16 @@ export function SecurityScreen({ eoa }: { eoa: string }) {
     | { kind: "error"; message: string }
     | null
   >(null);
+
+  // PS-8.2: C13's live panel lists every network by name. Beyond doc 17's
+  // literal "receipts/breakdown/withdraw", and included deliberately — leaving
+  // it out would let a session that saw all six names score as clean.
+  // The surface key is "security" because "delegations" matches copy-canon's
+  // banned stem and would redden CI (verified).
+  useNamedSource(
+    "security",
+    liveStatus.data?.unavailable === false && liveStatus.data.rows.length !== 0,
+  );
 
   async function confirmRevokeAll(): Promise<void> {
     const prep = prepare.data;

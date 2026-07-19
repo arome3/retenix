@@ -23,3 +23,4 @@ export * from "./quote";
 export * from "./market-hours";
 export * from "./hedge";
 export * from "./drawdown";
+export * from "./telemetry";
