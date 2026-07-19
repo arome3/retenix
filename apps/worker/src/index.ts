@@ -29,6 +29,7 @@ import {
 import { startHttp } from "./http";
 import { defaultKeeperDeps, KEEPER_CRON_DEMO, KEEPER_CRON_PROD, keeperTick, type KeeperDeps } from "./keeper";
 import { getAgentSigner, type AgentSigner } from "./kms";
+import { checkLinkBalance, disposeLinkBalance } from "./link-balance";
 import { captureError, initSentry } from "./notify";
 import { PolicyClient } from "./policy";
 import { rescueOrphans, scanDuePlans } from "./scheduler";
@@ -230,7 +231,14 @@ async function main(): Promise<void> {
       const kd = keeperDeps;
       keeperCron = cron.schedule(
         demoMode ? KEEPER_CRON_DEMO : KEEPER_CRON_PROD,
-        () => void keeperTick(kd).catch((err) => captureError(err, { source: "keeper-cron" })),
+        () =>
+          void keeperTick(kd)
+            // doc 17 trigger 5: an upkeep that runs out of LINK stops firing the
+            // inactivity deadline silently. Self-throttled to hourly and a
+            // no-op until the upkeep is registered, so it rides the keeper tick
+            // rather than earning a cron of its own.
+            .then(() => checkLinkBalance())
+            .catch((err) => captureError(err, { source: "keeper-cron" })),
         { noOverlap: true },
       );
     }
@@ -268,6 +276,7 @@ async function main(): Promise<void> {
     heartbeatCron?.stop();
     keeperCron?.stop();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    disposeLinkBalance();
     try {
       // Waits for the in-flight handler; a >60s poll is failed into pg-boss
       // retry and resumes at its persisted state (submitted → poll-only).
