@@ -26,6 +26,7 @@ import {
   observeOwner,
   type HeartbeatDeps,
 } from "./heartbeat";
+import { createHealth, markTick, markTickError } from "./health";
 import { startHttp } from "./http";
 import { defaultKeeperDeps, KEEPER_CRON_DEMO, KEEPER_CRON_PROD, keeperTick, type KeeperDeps } from "./keeper";
 import { getAgentSigner, type AgentSigner } from "./kms";
@@ -160,10 +161,12 @@ async function main(): Promise<void> {
 
   const schedulerCtx = { db, boss };
   const tick = async (): Promise<void> => {
+    markTick("scheduler");
     try {
       await scanDuePlans(schedulerCtx);
       await rescueOrphans(schedulerCtx);
     } catch (err) {
+      markTickError("scheduler");
       captureError(err, { source: "cron-tick" });
     }
   };
@@ -173,9 +176,11 @@ async function main(): Promise<void> {
   // rows for C11/C10. Plain cron body, no queue: a missed tick is an honest
   // chart gap, never something to retry into existence after the fact.
   const snapTick = async (): Promise<void> => {
+    markTick("snapshots");
     try {
       await snapshotTick({ db });
     } catch (err) {
+      markTickError("snapshots");
       captureError(err, { source: "snapshot-cron" });
     }
   };
@@ -224,27 +229,64 @@ async function main(): Promise<void> {
     const hb = heartbeatDeps;
     heartbeatCron = cron.schedule(
       demoMode ? HEARTBEAT_CRON_DEMO : HEARTBEAT_CRON_PROD,
-      () => void heartbeatTick(hb).catch((err) => captureError(err, { source: "heartbeat-cron" })),
+      () => {
+        markTick("heartbeat");
+        void heartbeatTick(hb).catch((err) => {
+          markTickError("heartbeat");
+          captureError(err, { source: "heartbeat-cron" });
+        });
+      },
       { noOverlap: true },
     );
     if (keeperDeps) {
       const kd = keeperDeps;
       keeperCron = cron.schedule(
         demoMode ? KEEPER_CRON_DEMO : KEEPER_CRON_PROD,
-        () =>
+        () => {
+          markTick("keeper");
           void keeperTick(kd)
             // doc 17 trigger 5: an upkeep that runs out of LINK stops firing the
             // inactivity deadline silently. Self-throttled to hourly and a
             // no-op until the upkeep is registered, so it rides the keeper tick
             // rather than earning a cron of its own.
             .then(() => checkLinkBalance())
-            .catch((err) => captureError(err, { source: "keeper-cron" })),
+            .catch((err) => {
+              markTickError("keeper");
+              captureError(err, { source: "keeper-cron" });
+            });
+        },
         { noOverlap: true },
       );
     }
   } else {
     console.warn("[worker] estate heartbeat/keeper disabled (degraded boot — no signer)");
   }
+
+  // Built after the crons so `enabled` reflects what actually got scheduled:
+  // a degraded boot or a missing escrow provider leaves them null, and a
+  // configured absence must report its reason rather than read as a fault.
+  const health = createHealth({
+    boss,
+    queueName: EXECUTE_QUEUE,
+    demoMode,
+    release: env.SENTRY_RELEASE ?? env.RAILWAY_GIT_COMMIT_SHA,
+    agent: agent ? { kind: agent.kind, address: agent.address } : null,
+    crons: {
+      scheduler: { enabled: true, everySecs: 60 },
+      snapshots: { enabled: true, everySecs: 3_600 },
+      heartbeat: {
+        enabled: heartbeatCron !== null,
+        everySecs: demoMode ? 20 : 300,
+        ...(heartbeatCron === null ? { note: "degraded boot — no signer" } : {}),
+      },
+      keeper: {
+        enabled: keeperCron !== null,
+        everySecs: demoMode ? 15 : 120,
+        ...(keeperCron === null ? { note: "no signer or no escrow provider" } : {}),
+      },
+    },
+    bootedAt: Date.now(),
+  });
 
   const server = startHttp({
     db,
@@ -255,6 +297,7 @@ async function main(): Promise<void> {
       // immediate observation on webhook match — UX freshness only
       observe: heartbeatDeps ? (estate) => observeOwner(heartbeatDeps, estate) : undefined,
     },
+    health,
   });
 
   // Fire-and-forget; boot readiness must not wait on quote warming.
@@ -276,6 +319,7 @@ async function main(): Promise<void> {
     heartbeatCron?.stop();
     keeperCron?.stop();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    health.dispose();
     disposeLinkBalance();
     try {
       // Waits for the in-flight handler; a >60s poll is failed into pg-boss
