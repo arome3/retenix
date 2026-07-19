@@ -20,3 +20,5 @@ export * from "./estate";
 export * from "./send";
 export * from "./security";
 export * from "./quote";
+export * from "./market-hours";
+export * from "./hedge";
